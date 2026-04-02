@@ -1,7 +1,7 @@
 using System.Windows;
+using System.Linq;
 using SyncLightBridge.Services;
 using SyncLightBridge.ViewModels;
-using H.NotifyIcon;
 
 namespace SyncLightBridge;
 
@@ -12,7 +12,6 @@ public partial class App : Application {
     public static EffectManager EffectManager { get; private set; } = null!;
     public static MainViewModel MainViewModel { get; private set; } = null!;
 
-    private TaskbarIcon? _taskbarIcon;
     private MainWindow? _mainWindow;
 
     protected override void OnStartup(StartupEventArgs e) {
@@ -23,21 +22,6 @@ public partial class App : Application {
         EffectManager = new EffectManager(UsbController);
         UdpListener = new UdpListener(UsbController, SettingsService);
         MainViewModel = new MainViewModel(UsbController, UdpListener, SettingsService, EffectManager);
-
-        // Create Tray Icon
-        _taskbarIcon = (TaskbarIcon)FindResource("TrayIcon");
-
-        try {
-            var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(16, 16, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
-            var visual = new System.Windows.Media.DrawingVisual();
-            using (var ctx = visual.RenderOpen()) {
-                ctx.DrawRoundedRectangle(System.Windows.Media.Brushes.DodgerBlue, null, new Rect(0, 0, 16, 16), 4, 4);
-                // Draw a simple white dot in the center to look a bit like a light
-                ctx.DrawEllipse(System.Windows.Media.Brushes.White, null, new Point(8, 8), 3, 3);
-            }
-            bmp.Render(visual);
-            if (_taskbarIcon != null) _taskbarIcon.IconSource = bmp;
-        } catch { }
 
         UdpListener.Start();
         MainViewModel.ApplyCurrentMode();
@@ -56,24 +40,9 @@ public partial class App : Application {
         }
     }
 
-    private void TaskbarIcon_TrayMouseDoubleClick(object sender, RoutedEventArgs e) {
-        _mainWindow?.Show();
-        if (_mainWindow?.WindowState == WindowState.Minimized)
-            _mainWindow.WindowState = WindowState.Normal;
-        _mainWindow?.Activate();
-    }
-
-    private void MenuItem_Open_Click(object sender, RoutedEventArgs e) {
-        _mainWindow?.Show();
-        if (_mainWindow?.WindowState == WindowState.Minimized)
-            _mainWindow.WindowState = WindowState.Normal;
-        _mainWindow?.Activate();
-    }
-
-    private void MenuItem_Exit_Click(object sender, RoutedEventArgs e) {
-        _taskbarIcon?.Dispose();
-        UdpListener.Stop();
-        UsbController.Dispose();
-        Current.Shutdown();
+    protected override void OnExit(ExitEventArgs e) {
+        UdpListener?.Stop();
+        UsbController?.Dispose();
+        base.OnExit(e);
     }
 }

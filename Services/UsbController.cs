@@ -15,7 +15,9 @@ public class UsbController : IDisposable {
     private readonly BlockingCollection<byte[]> _frameQueue;
 
     public event EventHandler<bool>? ConnectionChanged;
+    public event EventHandler? PhysicalButtonPressed;
     public bool IsConnected => _device != null && _device.IsConnected;
+    public bool IsHardwareOverridden { get; set; } = false;
 
     public UsbController(int ledCount) {
         _ledCount = ledCount;
@@ -25,12 +27,46 @@ public class UsbController : IDisposable {
 
         _ = Task.Run(SenderLoopAsync, _cancellationTokenSource.Token);
         _ = Task.Run(MonitorLoopAsync, _cancellationTokenSource.Token);
+        _ = Task.Run(ReadLoopAsync, _cancellationTokenSource.Token);
 
         TryConnect();
     }
 
     public void UpdateLedCount(int ledCount) {
         _ledCount = ledCount;
+    }
+
+    private async Task ReadLoopAsync() {
+        try {
+            while (!_cancellationTokenSource.Token.IsCancellationRequested) {
+                if (_device != null && _device.IsConnected) {
+                    // Using synchronous read with timeout inside Task.Run avoids PlatformNotSupportedException for async I/O
+                    var report = _device.ReadReport(500); 
+                    if (report.ReadStatus == HidDeviceData.ReadStatus.Success) {
+                        byte[] data = report.Data;
+                        // Remove leading Report ID byte dynamically if present (HidLibrary usually strips it, but some forks don't, check index offsets if needed)
+                        // Assuming data contains the payload directly starting at index 0 or 1. If 64 bytes, index 0 might be Report ID 0x00. Let's gracefully check both offsets.
+                        int offset = (data.Length == 65) ? 1 : 0;
+                        
+                        // Check packet signature: 52 42 08 00 F1 00
+                        if (data.Length >= offset + 6 && 
+                            data[offset + 0] == 0x52 && 
+                            data[offset + 1] == 0x42 && 
+                            data[offset + 2] == 0x08 && 
+                            data[offset + 3] == 0x00 && 
+                            data[offset + 4] == 0xF1 && 
+                            data[offset + 5] == 0x00) {
+                            
+                            PhysicalButtonPressed?.Invoke(this, EventArgs.Empty);
+                        }
+                    }
+                } else {
+                    await Task.Delay(500, _cancellationTokenSource.Token);
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { Debug.WriteLine($"Read error: {ex.Message}"); }
     }
 
     private async Task MonitorLoopAsync() {
@@ -100,7 +136,7 @@ public class UsbController : IDisposable {
     }
 
     public void EnqueueRawFrame(byte[] rgbData) {
-        if (!IsConnected) return;
+        if (!IsConnected || IsHardwareOverridden) return;
 
         while (_frameQueue.Count > 0) {
             _frameQueue.TryTake(out _);
@@ -117,6 +153,7 @@ public class UsbController : IDisposable {
         try {
             while (!_cancellationTokenSource.Token.IsCancellationRequested) {
                 if (_frameQueue.TryTake(out byte[]? rgbData, 33, _cancellationTokenSource.Token)) {
+                    if (IsHardwareOverridden) continue;
                     if (rgbData != null)
                         SendRawFrameInternal(rgbData);
                 }
@@ -176,6 +213,11 @@ public class UsbController : IDisposable {
         catch (Exception ex) {
             Debug.WriteLine($"USB error: {ex.Message}");
         }
+    }
+
+    public void SendBlackFrame() {
+        byte[] black = new byte[_ledCount * 3];
+        SendRawFrameInternal(black);
     }
 
     public void Dispose() {
