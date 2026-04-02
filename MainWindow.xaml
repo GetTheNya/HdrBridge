@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
         xmlns:converters="clr-namespace:SyncLightBridge.Converters"
-        Title="SyncLight Bridge" Height="580" Width="480"
+        xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
+        Title="SyncLight Bridge" Height="700" Width="550"
         Background="#1E1E1E" Foreground="White"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanMinimize"
@@ -20,6 +21,9 @@
         <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="White"/>
 
         <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
+        <converters:EnumMatchToVisibilityConverter x:Key="EnumMatchToVisibilityConverter"/>
+        <converters:EnumMatchToBoolConverter x:Key="EnumMatchToBoolConverter"/>
+        <converters:RGBToColorConverter x:Key="RGBToColorConverter"/>
         
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="#E0E0E0"/>
@@ -30,6 +34,16 @@
             <Setter Property="BorderBrush" Value="#3F3F46"/>
             <Setter Property="Padding" Value="6"/>
             <Setter Property="Margin" Value="0,0,0,15"/>
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Margin" Value="0,0,15,0"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style TargetType="Slider">
+            <Setter Property="Margin" Value="0,5,0,20"/>
+            <Setter Property="IsSnapToTickEnabled" Value="True"/>
+            <Setter Property="TickFrequency" Value="1"/>
         </Style>
         <Style TargetType="ComboBox">
             <Setter Property="Foreground" Value="White"/>
@@ -140,38 +154,43 @@
         </StackPanel>
 
         <TabControl Grid.Row="1" Background="#252526" BorderThickness="0" Foreground="White">
-            <!-- HYPERHDR TAB -->
-            <TabItem Header="HyperHDR Sync">
+            
+            <!-- DASHBOARD TAB -->
+            <TabItem Header="Dashboard">
                 <StackPanel Margin="20">
-                    <TextBlock Text="This mode bridges HyperHDR UDP frames directly to your LED strip. Make sure HyperHDR is broadcasting to the correct UDP port." TextWrapping="Wrap" Margin="0,0,0,25" />
+                    <TextBlock Text="Select Operating Mode" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,15"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,25">
+                        <RadioButton Content="HyperHDR Sync" IsChecked="{Binding CurrentMode, Converter={StaticResource EnumMatchToBoolConverter}, ConverterParameter=HyperHDRSync}" />
+                        <RadioButton Content="Solid Color" IsChecked="{Binding CurrentMode, Converter={StaticResource EnumMatchToBoolConverter}, ConverterParameter=StaticColor}" />
+                        <RadioButton Content="Hardware Effects" IsChecked="{Binding CurrentMode, Converter={StaticResource EnumMatchToBoolConverter}, ConverterParameter=HardwareEffect}" />
+                    </StackPanel>
+
+                    <!-- Dynamic Layer: Hyper HDR -->
+                    <StackPanel Visibility="{Binding CurrentMode, Converter={StaticResource EnumMatchToVisibilityConverter}, ConverterParameter=HyperHDRSync}">
+                        <TextBlock Text="This mode bridges HyperHDR UDP frames directly to your LED strip. Make sure HyperHDR is broadcasting securely to your computer." TextWrapping="Wrap" Margin="0,0,0,20"/>
+                        <Border Background="#1E1E1E" CornerRadius="8" Padding="15">
+                            <TextBlock Text="{Binding SettingsService.CurrentSettings.UdpPort, StringFormat='Listening on UDP {0}...'}" FontWeight="SemiBold" Foreground="#007ACC" HorizontalAlignment="Center"/>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Dynamic Layer: Solid Color Picker -->
+                    <StackPanel Visibility="{Binding CurrentMode, Converter={StaticResource EnumMatchToVisibilityConverter}, ConverterParameter=StaticColor}">
+                        <TextBlock Text="Solid Color Tuning" FontWeight="SemiBold" Margin="0,0,0,15"/>
+                        
+                        <xctk:ColorCanvas SelectedColor="{Binding StaticColorMedia, Mode=TwoWay}" Background="Transparent" Foreground="White" BorderThickness="0" Margin="0,0,0,20" />
+                        
+                    </StackPanel>
+
+                    <!-- Dynamic Layer: Hardware Effects -->
+                    <StackPanel Visibility="{Binding CurrentMode, Converter={StaticResource EnumMatchToVisibilityConverter}, ConverterParameter=HardwareEffect}">
+                        <TextBlock Text="Hardware Effects Engine" FontWeight="SemiBold" Margin="0,0,0,15"/>
+                        <ComboBox ItemsSource="{Binding AvailableEffects}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedHardwareEffect}" Margin="0,0,0,25" Padding="6" />
+                        
+                        <TextBlock Text="Effect Speed / Intensity" />
+                        <Slider Minimum="0" Maximum="100" Value="{Binding HardwareEffectSpeed, Delay=100}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,20" />
+                        
+                    </StackPanel>
                     
-
-
-                    <Button Content="Activate HyperHDR Sync" Command="{Binding ActivateHyperHDRCommand}" Background="#007ACC" Foreground="White" BorderThickness="0" Padding="12" Cursor="Hand" FontSize="14" FontWeight="SemiBold">
-                        <Button.Resources>
-                            <Style TargetType="Border">
-                                <Setter Property="CornerRadius" Value="6"/>
-                            </Style>
-                        </Button.Resources>
-                    </Button>
-                </StackPanel>
-            </TabItem>
-
-            <!-- HARDWARE EFFECTS TAB -->
-            <TabItem Header="Hardware Effects">
-                <StackPanel Margin="20">
-                    <TextBlock Text="Trigger built-in hardware effects standalone. This will bypass the HyperHDR stream and use the LED strip's internal effects structure." TextWrapping="Wrap" Margin="0,0,0,25"/>
-
-                    <TextBlock Text="Select Effect" Margin="0,0,0,5" FontWeight="SemiBold"/>
-                    <ComboBox ItemsSource="{Binding AvailableEffects}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedHardwareEffect}" Margin="0,0,0,30" Padding="6" />
-
-                    <Button Content="Activate Hardware Effect" Command="{Binding ActivateHardwareModeCommand}" Background="#9C27B0" Foreground="White" BorderThickness="0" Padding="12" Cursor="Hand" FontSize="14" FontWeight="SemiBold">
-                        <Button.Resources>
-                            <Style TargetType="Border">
-                                <Setter Property="CornerRadius" Value="6"/>
-                            </Style>
-                        </Button.Resources>
-                    </Button>
                 </StackPanel>
             </TabItem>
 

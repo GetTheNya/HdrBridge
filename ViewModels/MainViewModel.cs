@@ -18,7 +18,39 @@ public partial class MainViewModel : ObservableObject {
     [ObservableProperty] private bool _isServicesEnabled = true;
     [ObservableProperty] private string _servicesStatusString = "🟢 System Active";
 
+    [ObservableProperty] private byte _staticColorR = 255;
+    [ObservableProperty] private byte _staticColorG = 255;
+    [ObservableProperty] private byte _staticColorB = 255;
+    [ObservableProperty] private byte _hardwareEffectSpeed = 127;
+    [ObservableProperty] private string _lastSentEffectId = "None";
+
+    public System.Windows.Media.Color StaticColorMedia {
+        get => System.Windows.Media.Color.FromRgb(StaticColorR, StaticColorG, StaticColorB);
+        set {
+            if (value.R != StaticColorR || value.G != StaticColorG || value.B != StaticColorB) {
+                StaticColorR = value.R;
+                StaticColorG = value.G;
+                StaticColorB = value.B;
+                OnPropertyChanged(nameof(StaticColorMedia));
+            }
+        }
+    }
+
+    private readonly System.Timers.Timer _staticColorTimer;
+
     public ObservableCollection<HardwareEffect> AvailableEffects { get; }
+
+    public AppMode CurrentMode {
+        get => SettingsService.CurrentSettings.SelectedMode;
+        set {
+            if (SettingsService.CurrentSettings.SelectedMode != value) {
+                SettingsService.CurrentSettings.SelectedMode = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CurrentModeString));
+                ApplyCurrentMode();
+            }
+        }
+    }
 
     public string CurrentModeString {
         get {
@@ -55,6 +87,14 @@ public partial class MainViewModel : ObservableObject {
             });
         };
 
+        _staticColorTimer = new System.Timers.Timer(150); // ~6.6 FPS
+        _staticColorTimer.Elapsed += (s, e) => {
+            if (CurrentMode == AppMode.StaticColor && IsServicesEnabled) {
+                SendStaticColorFrame();
+            }
+        };
+        _staticColorTimer.Start();
+
         IsUsbConnected = _usbController.IsConnected;
         IsUdpListening = _udpListener.IsListening;
     }
@@ -86,10 +126,60 @@ public partial class MainViewModel : ObservableObject {
         ApplyCurrentMode();
     }
 
+    partial void OnHardwareEffectSpeedChanged(byte value) {
+        if (CurrentMode == AppMode.HardwareEffect && IsServicesEnabled) {
+             _effectManager.SetEffectSpeed(value);
+        }
+    }
+
+
+
+    partial void OnStaticColorRChanged(byte value) { OnPropertyChanged(nameof(StaticColorMedia)); }
+    partial void OnStaticColorGChanged(byte value) { OnPropertyChanged(nameof(StaticColorMedia)); }
+    partial void OnStaticColorBChanged(byte value) { OnPropertyChanged(nameof(StaticColorMedia)); }
+
+    private void SendStaticColorFrame() {
+        int count = SettingsService.CurrentSettings.LedCount;
+        byte[] frame = new byte[count * 3];
+        for(int i=0; i < count; i++) {
+            frame[i*3] = StaticColorR;
+            frame[(i*3)+1] = StaticColorG;
+            frame[(i*3)+2] = StaticColorB;
+        }
+        _usbController.EnqueueRawFrame(frame);
+    }
+    
+    [RelayCommand]
+    public void SetPredefinedColor(string colorName) {
+        if (colorName == "Red") { StaticColorR = 255; StaticColorG = 0; StaticColorB = 0; }
+        else if (colorName == "Green") { StaticColorR = 0; StaticColorG = 255; StaticColorB = 0; }
+        else if (colorName == "Blue") { StaticColorR = 0; StaticColorG = 0; StaticColorB = 255; }
+        else if (colorName == "Yellow") { StaticColorR = 255; StaticColorG = 255; StaticColorB = 0; }
+        else if (colorName == "Purple") { StaticColorR = 128; StaticColorG = 0; StaticColorB = 128; }
+        else if (colorName == "Cyan") { StaticColorR = 0; StaticColorG = 255; StaticColorB = 255; }
+        else if (colorName == "White") { StaticColorR = 255; StaticColorG = 255; StaticColorB = 255; }
+        else if (colorName == "Orange") { StaticColorR = 255; StaticColorG = 140; StaticColorB = 0; }
+        
+        if (CurrentMode == AppMode.StaticColor && IsServicesEnabled) {
+            SendStaticColorFrame();
+        }
+    }
+    
+    [RelayCommand]
+    public void SendDebugEffect(string hexId) {
+        if (CurrentMode == AppMode.HardwareEffect && IsServicesEnabled) {
+            try {
+                byte id = Convert.ToByte(hexId, 16);
+                _effectManager.SetHardwareEffect(id);
+                LastSentEffectId = $"0x{id:X2}";
+            } catch { }
+        }
+    }
+
     public void ApplyCurrentMode() {
         if (!IsServicesEnabled) {
             _udpListener.Stop();
-            _effectManager.SetStaticColor(0, 0, 0); // Turn LEDs off
+            _usbController.SendBlackFrame();
             OnPropertyChanged(nameof(CurrentModeString));
             return;
         }
@@ -100,7 +190,7 @@ public partial class MainViewModel : ObservableObject {
         } else {
             _udpListener.Stop();
             if (mode == AppMode.StaticColor) {
-                _effectManager.SetStaticColor(255, 255, 255);
+                SendStaticColorFrame();
             } else if (mode == AppMode.HardwareEffect && SelectedHardwareEffect != null) {
                 _effectManager.SetHardwareEffect(SelectedHardwareEffect.EffectId);
             }
