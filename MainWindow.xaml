@@ -184,9 +184,18 @@
                     <!-- Dynamic Layer: Hardware Effects -->
                     <StackPanel Visibility="{Binding CurrentMode, Converter={StaticResource EnumMatchToVisibilityConverter}, ConverterParameter=HardwareEffect}">
                         <TextBlock Text="Hardware Effects Engine" FontWeight="SemiBold" Margin="0,0,0,15"/>
-                        <ComboBox ItemsSource="{Binding AvailableEffects}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedHardwareEffect}" Margin="0,0,0,25" Padding="6" />
+                        <ComboBox ItemsSource="{Binding AvailableEffects}" SelectedItem="{Binding SelectedHardwareEffect}" Margin="0,0,0,25" Padding="6">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="2,3,2,3">
+                                        <TextBlock Text="{Binding Category}" Foreground="#888888" FontWeight="SemiBold" FontSize="11" Width="55" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                         
-                        <TextBlock Text="Effect Speed / Intensity" />
+                        <TextBlock Text="{Binding SliderLabel}" />
                         <Slider Minimum="0" Maximum="100" Value="{Binding HardwareEffectSpeed, Delay=100}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,20" />
                         
                     </StackPanel>

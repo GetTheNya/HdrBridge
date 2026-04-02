@@ -23,6 +23,8 @@ public partial class MainViewModel : ObservableObject {
     [ObservableProperty] private byte _staticColorB = 255;
     [ObservableProperty] private byte _hardwareEffectSpeed = 127;
     [ObservableProperty] private string _lastSentEffectId = "None";
+    
+    public string SliderLabel => SelectedHardwareEffect?.Category == EffectCategory.Rhythm ? "Microphone Sensitivity" : "Effect Speed / Intensity";
 
     public System.Windows.Media.Color StaticColorMedia {
         get => System.Windows.Media.Color.FromRgb(StaticColorR, StaticColorG, StaticColorB);
@@ -127,8 +129,8 @@ public partial class MainViewModel : ObservableObject {
     }
 
     partial void OnHardwareEffectSpeedChanged(byte value) {
-        if (CurrentMode == AppMode.HardwareEffect && IsServicesEnabled) {
-             _effectManager.SetEffectSpeed(value);
+        if (CurrentMode == AppMode.HardwareEffect && IsServicesEnabled && SelectedHardwareEffect != null) {
+             _effectManager.SetEffectSpeed(SelectedHardwareEffect, value);
         }
     }
 
@@ -165,16 +167,6 @@ public partial class MainViewModel : ObservableObject {
         }
     }
     
-    [RelayCommand]
-    public void SendDebugEffect(string hexId) {
-        if (CurrentMode == AppMode.HardwareEffect && IsServicesEnabled) {
-            try {
-                byte id = Convert.ToByte(hexId, 16);
-                _effectManager.SetHardwareEffect(id);
-                LastSentEffectId = $"0x{id:X2}";
-            } catch { }
-        }
-    }
 
     public void ApplyCurrentMode() {
         if (!IsServicesEnabled) {
@@ -192,7 +184,7 @@ public partial class MainViewModel : ObservableObject {
             if (mode == AppMode.StaticColor) {
                 SendStaticColorFrame();
             } else if (mode == AppMode.HardwareEffect && SelectedHardwareEffect != null) {
-                _effectManager.SetHardwareEffect(SelectedHardwareEffect.EffectId);
+                _effectManager.SetHardwareEffect(SelectedHardwareEffect);
             }
         }
 
@@ -201,6 +193,7 @@ public partial class MainViewModel : ObservableObject {
     }
 
     partial void OnSelectedHardwareEffectChanged(HardwareEffect? value) {
+        OnPropertyChanged(nameof(SliderLabel));
         if (SettingsService.CurrentSettings.SelectedMode == AppMode.HardwareEffect) {
             ApplyCurrentMode();
         }
