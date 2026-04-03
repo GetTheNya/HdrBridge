@@ -15,7 +15,7 @@ public class UsbController : IDisposable {
     private readonly BlockingCollection<byte[]> _frameQueue;
 
     public event EventHandler<bool>? ConnectionChanged;
-    public event EventHandler? PhysicalButtonPressed;
+    public event EventHandler<RemoteButtonAction>? RemoteButtonPressed;
     public bool IsConnected => _device != null && _device.IsConnected;
     public bool IsHardwareOverridden { get; set; } = false;
 
@@ -49,7 +49,7 @@ public class UsbController : IDisposable {
                         int offset = (data.Length == 65) ? 1 : 0;
                         
                         // Check packet signature: 52 42 08 00 F1 00
-                        if (data.Length >= offset + 6 && 
+                        if (data.Length >= offset + 25 && 
                             data[offset + 0] == 0x52 && 
                             data[offset + 1] == 0x42 && 
                             data[offset + 2] == 0x08 && 
@@ -57,7 +57,17 @@ public class UsbController : IDisposable {
                             data[offset + 4] == 0xF1 && 
                             data[offset + 5] == 0x00) {
                             
-                            PhysicalButtonPressed?.Invoke(this, EventArgs.Empty);
+                            if (data[offset + 16] == 0x04) {
+                                RemoteButtonPressed?.Invoke(this, RemoteButtonAction.PowerToggle);
+                            } else {
+                                if (data[offset + 16] == 0x41 && data[offset + 24] == 0x32) {
+                                    RemoteButtonPressed?.Invoke(this, RemoteButtonAction.StaticColorForce);
+                                } else if (data[offset + 16] == 0x41 && data[offset + 24] == 0x5A) {
+                                    RemoteButtonPressed?.Invoke(this, RemoteButtonAction.DynamicEffectForce);
+                                } else {
+                                    RemoteButtonPressed?.Invoke(this, RemoteButtonAction.UnknownOverrideForce);
+                                }
+                            }
                         }
                     }
                 } else {
@@ -286,4 +296,11 @@ public class UsbController : IDisposable {
         _cancellationTokenSource.Cancel();
         _device?.Dispose();
     }
+}
+
+public enum RemoteButtonAction {
+    PowerToggle,
+    StaticColorForce,
+    DynamicEffectForce,
+    UnknownOverrideForce
 }

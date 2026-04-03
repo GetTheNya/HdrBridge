@@ -16,7 +16,8 @@ public partial class MainViewModel : ObservableObject {
     [ObservableProperty] private bool _isUdpListening;
     [ObservableProperty] private HardwareEffect? _selectedHardwareEffect;
     [ObservableProperty] private bool _isServicesEnabled = true;
-    [ObservableProperty] private string _servicesStatusString = "🟢 System Active";
+    [ObservableProperty] private string _servicesStatusString = "System Active";
+    [ObservableProperty] private string _servicesStatusColor = "#60A917";
 
     [ObservableProperty] private byte _staticColorR = 255;
     [ObservableProperty] private byte _staticColorG = 255;
@@ -56,12 +57,24 @@ public partial class MainViewModel : ObservableObject {
 
     public string CurrentModeString {
         get {
-            if (!IsServicesEnabled) return "⚫ System Disabled";
+            if (!IsServicesEnabled) return "System Disabled";
             return SettingsService.CurrentSettings.SelectedMode switch {
-                AppMode.HyperHDRSync => "🟢 Mode: HyperHDR Sync Active",
-                AppMode.StaticColor => "🔵 Mode: Static Color Active",
-                AppMode.HardwareEffect => "🟣 Mode: Hardware Effect Active",
+                AppMode.HyperHDRSync => "Mode: HyperHDR Sync Active",
+                AppMode.StaticColor => "Mode: Static Color Active",
+                AppMode.HardwareEffect => "Mode: Hardware Effect Active",
                 _ => "Unknown"
+            };
+        }
+    }
+
+    public string CurrentModeColor {
+        get {
+            if (!IsServicesEnabled) return "#888888";
+            return SettingsService.CurrentSettings.SelectedMode switch {
+                AppMode.HyperHDRSync => "#60A917", // Green
+                AppMode.StaticColor => "#0050EF", // Blue
+                AppMode.HardwareEffect => "#AA00FF", // Purple
+                _ => "#888888"
             };
         }
     }
@@ -83,9 +96,23 @@ public partial class MainViewModel : ObservableObject {
 
         _udpListener.ListenerStateChanged += (s, listening) => { System.Windows.Application.Current?.Dispatcher?.Invoke(() => IsUdpListening = listening); };
 
-        _usbController.PhysicalButtonPressed += (s, e) => {
+        _usbController.RemoteButtonPressed += (s, action) => {
             System.Windows.Application.Current?.Dispatcher?.Invoke(() => {
-                _ = ToggleServices();
+                if (action == RemoteButtonAction.PowerToggle) {
+                    _ = ToggleServices();
+                } else if (action == RemoteButtonAction.StaticColorForce) {
+                    if (IsServicesEnabled) _ = ToggleServices();
+                    ServicesStatusString = "Manual: Static Color";
+                    ServicesStatusColor = "#E51400";
+                } else if (action == RemoteButtonAction.DynamicEffectForce) {
+                    if (IsServicesEnabled) _ = ToggleServices();
+                    ServicesStatusString = "Manual: Music Mode";
+                    ServicesStatusColor = "#E51400";
+                } else if (action == RemoteButtonAction.UnknownOverrideForce) {
+                    if (IsServicesEnabled) _ = ToggleServices();
+                    ServicesStatusString = "Manual: Remote Override";
+                    ServicesStatusColor = "#E51400";
+                }
             });
         };
 
@@ -119,7 +146,8 @@ public partial class MainViewModel : ObservableObject {
     public async Task ToggleServices() {
         IsServicesEnabled = !IsServicesEnabled;
         _usbController.IsHardwareOverridden = !IsServicesEnabled;
-        ServicesStatusString = IsServicesEnabled ? "🟢 System Active" : "🔴 System Offline";
+        ServicesStatusString = IsServicesEnabled ? "System Active" : "System Offline";
+        ServicesStatusColor = IsServicesEnabled ? "#60A917" : "#E51400";
         
         if (!IsServicesEnabled) {
             await _usbController.SendPowerCommandAsync(false);
@@ -207,6 +235,6 @@ public partial class MainViewModel : ObservableObject {
         _usbController.UpdateLedCount(SettingsService.CurrentSettings.LedCount);
 
         _udpListener.Stop();
-        _udpListener.Start();
+        _ = ApplyCurrentModeAsync();
     }
 }

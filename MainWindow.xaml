@@ -122,7 +122,10 @@
                 </Grid.ColumnDefinitions>
                 
                 <StackPanel>
-                    <TextBlock Text="{Binding CurrentModeString}" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Ellipse Fill="{Binding CurrentModeColor}" Width="16" Height="16" Margin="0,0,10,0"/>
+                        <TextBlock Text="{Binding CurrentModeString}" FontSize="16" FontWeight="Bold"/>
+                    </StackPanel>
                     
                     <StackPanel Orientation="Horizontal">
                         <Ellipse Width="12" Height="12" Fill="{Binding IsUsbConnected, Converter={StaticResource BoolToColorConverter}}" Margin="0,0,8,0"/>
@@ -133,10 +136,30 @@
                     </StackPanel>
                 </StackPanel>
                 
-                <Button Grid.Column="1" Content="{Binding ServicesStatusString}" Command="{Binding ToggleServicesCommand}" Foreground="White" BorderThickness="0" Padding="12" Cursor="Hand" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center">
+                <Button Grid.Column="1" Command="{Binding ToggleServicesCommand}" Foreground="White" BorderThickness="0" Padding="12,8" Cursor="Hand" VerticalAlignment="Center">
+                    <Button.Content>
+                        <TextBlock Text="{Binding ServicesStatusString}" FontSize="14" FontWeight="SemiBold"/>
+                    </Button.Content>
                     <Button.Style>
                         <Style TargetType="Button">
                             <Setter Property="Background" Value="#60A917"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}" CornerRadius="6" x:Name="border" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="border" Property="Opacity" Value="0.85"/>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="border" Property="Opacity" Value="0.7"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsServicesEnabled}" Value="False">
                                     <Setter Property="Background" Value="#E51400"/>
@@ -144,11 +167,6 @@
                             </Style.Triggers>
                         </Style>
                     </Button.Style>
-                    <Button.Resources>
-                        <Style TargetType="Border">
-                            <Setter Property="CornerRadius" Value="6"/>
-                        </Style>
-                    </Button.Resources>
                 </Button>
             </Grid>
         </StackPanel>
