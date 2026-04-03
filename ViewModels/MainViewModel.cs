@@ -2,7 +2,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SyncLightBridge.Models;
 using SyncLightBridge.Services;
+using System;
 using System.Collections.ObjectModel;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace SyncLightBridge.ViewModels;
@@ -10,9 +12,12 @@ namespace SyncLightBridge.ViewModels;
 public partial class MainViewModel : ObservableObject {
     private readonly UsbController _usbController;
     private readonly UdpListener _udpListener;
+    private readonly NotificationService _notifications;
     public SettingsService SettingsService { get; }
     private readonly EffectManager _effectManager;
     private readonly HyperHdrService _hyperHdrService;
+    private readonly BitmapFrame _trayIconActive;
+    private readonly BitmapFrame _trayIconPaused;
 
     [ObservableProperty] private bool _isUsbConnected;
     [ObservableProperty] private bool _isUdpListening;
@@ -27,7 +32,12 @@ public partial class MainViewModel : ObservableObject {
     [ObservableProperty] private byte _hardwareEffectSpeed = 127;
     [ObservableProperty] private string _lastSentEffectId = "None";
     [ObservableProperty] private bool _isHyperHdrServerReachable;
-    
+
+    public string SyncToggleMenuHeader => IsServicesEnabled ? "Disable Sync" : "Enable Sync";
+    public string TrayToolTipText => IsServicesEnabled ? "SyncLight Bridge — Syncing" : "SyncLight Bridge — Paused";
+    public BitmapFrame TrayIconSource => IsServicesEnabled ? _trayIconActive : _trayIconPaused;
+    public bool IsManualMode => !IsServicesEnabled;
+
     public string SliderLabel => SelectedHardwareEffect?.Category == EffectCategory.Rhythm ? "Microphone Sensitivity" : "Effect Speed / Intensity";
 
     public System.Windows.Media.Color StaticColorMedia {
@@ -89,36 +99,46 @@ public partial class MainViewModel : ObservableObject {
         UdpListener udpListener,
         SettingsService settingsService,
         EffectManager effectManager,
-        HyperHdrService hyperHdrService) {
+        HyperHdrService hyperHdrService,
+        NotificationService notificationService) {
         _usbController = usbController;
         _udpListener = udpListener;
         SettingsService = settingsService;
         _effectManager = effectManager;
         _hyperHdrService = hyperHdrService;
+        _notifications = notificationService;
+
+        _trayIconActive = BitmapFrame.Create(new Uri("pack://application:,,,/Resources/app.ico"));
+        _trayIconPaused = BitmapFrame.Create(new Uri("pack://application:,,,/Resources/tray_paused.ico"));
 
         AvailableEffects = new ObservableCollection<HardwareEffect>(_effectManager.AvailableEffects);
         SelectedHardwareEffect = AvailableEffects.FirstOrDefault();
 
-        _usbController.ConnectionChanged += (s, connected) => { System.Windows.Application.Current?.Dispatcher?.Invoke(() => IsUsbConnected = connected); };
+        _usbController.ConnectionChanged += (s, connected) => {
+            System.Windows.Application.Current?.Dispatcher?.Invoke(() => OnUsbConnectionChanged(connected));
+        };
 
         _udpListener.ListenerStateChanged += (s, listening) => { System.Windows.Application.Current?.Dispatcher?.Invoke(() => IsUdpListening = listening); };
 
         _usbController.RemoteButtonPressed += (s, action) => {
             System.Windows.Application.Current?.Dispatcher?.Invoke(() => {
                 if (action == RemoteButtonAction.PowerToggle) {
-                    _ = ToggleServices();
+                    _ = RemotePowerToggleWithToastAsync();
                 } else if (action == RemoteButtonAction.StaticColorForce) {
                     if (IsServicesEnabled) _ = ToggleServices();
                     ServicesStatusString = "Manual: Static Color";
                     ServicesStatusColor = "#E51400";
+                    _notifications.Show("SyncLight Bridge", "Ambilight: static color");
                 } else if (action == RemoteButtonAction.DynamicEffectForce) {
                     if (IsServicesEnabled) _ = ToggleServices();
                     ServicesStatusString = "Manual: Music Mode";
                     ServicesStatusColor = "#E51400";
+                    _notifications.Show("SyncLight Bridge", "Ambilight: music mode");
                 } else if (action == RemoteButtonAction.UnknownOverrideForce) {
                     if (IsServicesEnabled) _ = ToggleServices();
                     ServicesStatusString = "Manual: Remote Override";
                     ServicesStatusColor = "#E51400";
+                    _notifications.Show("SyncLight Bridge", "Ambilight: remote override");
                 }
             });
         };
@@ -138,6 +158,33 @@ public partial class MainViewModel : ObservableObject {
 
         IsUsbConnected = _usbController.IsConnected;
         IsUdpListening = _udpListener.IsListening;
+    }
+
+    private void OnUsbConnectionChanged(bool connected) {
+        IsUsbConnected = connected;
+        if (connected) {
+            _notifications.Show("SyncLight Bridge", "Controller connected");
+            _ = ApplyCurrentModeAsync();
+        } else {
+            _udpListener.Stop();
+            _notifications.Show("SyncLight Bridge", "Controller disconnected");
+        }
+    }
+
+    private async Task RemotePowerToggleWithToastAsync() {
+        await ToggleServices();
+        _notifications.Show("SyncLight Bridge", IsServicesEnabled ? "Ambilight resumed" : "Ambilight paused");
+    }
+
+    partial void OnIsServicesEnabledChanged(bool value) {
+        OnPropertyChanged(nameof(SyncToggleMenuHeader));
+        OnPropertyChanged(nameof(TrayToolTipText));
+        OnPropertyChanged(nameof(TrayIconSource));
+        OnPropertyChanged(nameof(IsManualMode));
+    }
+
+    public void SaveStartupPreference() {
+        SettingsService.SaveSettings();
     }
 
     [RelayCommand]

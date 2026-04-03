@@ -100,7 +100,7 @@ public class UsbController : IDisposable {
         }
     }
 
-    private void TryConnect() {
+    public void TryConnect() {
         try {
             var device = HidDevices.Enumerate(VendorId, ProductId)
                 .FirstOrDefault(d => d.DevicePath.Contains("mi_00", StringComparison.OrdinalIgnoreCase));
