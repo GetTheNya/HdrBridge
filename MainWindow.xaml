@@ -261,28 +261,69 @@
             </TabItem>
             <!-- ABOUT TAB -->
             <TabItem Header="About">
-                <Grid Margin="30">
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <Image Source="pack://application:,,,/Resources/app_hires.ico" Width="80" Height="80" Margin="0,0,0,20">
-                            <Image.Effect>
-                                <DropShadowEffect BlurRadius="15" ShadowDepth="0" Color="#007ACC" Opacity="0.5"/>
-                            </Image.Effect>
-                        </Image>
-                        
-                        <TextBlock Text="HdrBridge" FontSize="28" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,5"/>
-                        <TextBlock Text="{Binding AppVersion}" FontSize="14" Foreground="#888888" HorizontalAlignment="Center" Margin="0,0,0,25"/>
-                        
-                        <Border Height="1" Background="#3F3F46" Margin="0,0,0,25" Width="200"/>
-                        
-                        <TextBlock Text="Developed by GetTheNya" FontSize="16" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                        
-                        <TextBlock HorizontalAlignment="Center" FontSize="14">
-                            <Hyperlink NavigateUri="https://github.com/GetTheNya/HdrBridge" RequestNavigate="Hyperlink_RequestNavigate" Foreground="#007ACC">
-                                GitHub Repository
-                            </Hyperlink>
-                        </TextBlock>
-                    </StackPanel>
-                </Grid>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="30,10">
+                        <StackPanel MaxWidth="450">
+                            <!-- Header Section -->
+                            <StackPanel HorizontalAlignment="Center" Margin="0,0,0,30">
+                                <Grid Width="100" Height="100" Margin="0,0,0,15">
+                                    <Ellipse Fill="#2D2D30" Stroke="#007ACC" StrokeThickness="1"/>
+                                    <Image Source="pack://application:,,,/Resources/app_hires.ico" Width="64" Height="64">
+                                        <Image.Effect>
+                                            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Color="#007ACC" Opacity="0.4"/>
+                                        </Image.Effect>
+                                    </Image>
+                                </Grid>
+                                <TextBlock Text="HdrBridge" FontSize="32" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding AppVersion}" FontSize="12" Foreground="#888888" HorizontalAlignment="Center" FontWeight="SemiBold" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <!-- Philosophy Section -->
+                            <StackPanel Margin="0,0,0,30">
+                                <TextBlock Text="&quot;Born out of frustration.&quot;" FontSize="18" FontStyle="Italic" Foreground="#007ACC" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                                <TextBlock Text="A lightweight, zero-bloat bridge for USB-HID Ambilight controllers. Designed to replace resource-heavy generic software with a clean C# implementation that respects your GPU and CPU cycles." 
+                                           TextWrapping="Wrap" TextAlignment="Center" FontSize="14" Foreground="#CCCCCC" LineHeight="20"/>
+                            </StackPanel>
+
+                            <Border Height="1" Background="#3F3F46" Margin="0,0,0,25" HorizontalAlignment="Stretch"/>
+
+                            <!-- Technical Details -->
+                            <Grid Margin="0,0,0,25">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                    <TextBlock Text="Engine" FontSize="11" FontWeight="Bold" Foreground="#888888" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                    <TextBlock Text="HyperHDR API" FontSize="13" Foreground="White" HorizontalAlignment="Center"/>
+                                </StackPanel>
+
+                                <Border Grid.Column="1" Width="1" Background="#3F3F46" Margin="20,0"/>
+
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                    <TextBlock Text="License" FontSize="11" FontWeight="Bold" Foreground="#888888" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                    <TextBlock Text="MIT Open Source" FontSize="13" Foreground="White" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Links & Credits -->
+                            <StackPanel Margin="0,0,0,40">
+                                <TextBlock Text="Made with ❤️ by GetTheNya" FontSize="14" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                <TextBlock HorizontalAlignment="Center" FontSize="14">
+                                    <Hyperlink NavigateUri="https://github.com/GetTheNya/HdrBridge" RequestNavigate="Hyperlink_RequestNavigate" Foreground="#007ACC" TextDecorations="None">
+                                        github.com/GetTheNya/HdrBridge
+                                    </Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+
+                            <!-- Easter Egg / Quote (Inconspicuous) -->
+                            <TextBlock Text="&quot;If the software is buggy, rewrite it. If it’s Chinese, reverse engineer it.&quot; — GetTheNya's Engineering Rule #1." 
+                                       FontSize="10" Foreground="#969696ff" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Opacity="0.8"/>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
             </TabItem>
         </TabControl>
     </Grid>
