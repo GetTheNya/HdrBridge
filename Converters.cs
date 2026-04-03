@@ -57,3 +57,17 @@ public class RGBToColorConverter : IMultiValueConverter {
         throw new NotImplementedException();
     }
 }
+
+public class BoolToStringConverter : IValueConverter {
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) {
+        if (parameter is not string param) return Binding.DoNothing;
+        var parts = param.Split('|');
+        if (parts.Length != 2) return Binding.DoNothing;
+
+        return (value is bool b && b) ? parts[0] : parts[1];
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) {
+        return Binding.DoNothing;
+    }
+}
