@@ -1,10 +1,9 @@
-using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
-using SyncLightBridge.ViewModels;
+using HdrBridge.ViewModels;
 
-namespace SyncLightBridge;
+namespace HdrBridge;
 
 public partial class MainWindow : Window {
     public MainWindow() {
@@ -56,5 +55,10 @@ public partial class MainWindow : Window {
             TrayIcon?.Dispose();
             Application.Current.Shutdown();
         }));
+    }
+
+    private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e) {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        e.Handled = true;
     }
 }

@@ -1,11 +1,10 @@
-using System;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
-using Microsoft.Toolkit.Uwp.Notifications;
 using Windows.UI.Notifications;
+using Microsoft.Toolkit.Uwp.Notifications;
 
-namespace SyncLightBridge.Services;
+namespace HdrBridge.Services;
 
 public sealed class NotificationService {
     private readonly string? _iconPath;
@@ -14,7 +13,7 @@ public sealed class NotificationService {
         try {
             // Toast notifications need a file:// URI, not a pack:// URI.
             // Extract the app icon to a temp location once at startup.
-            var tempDir = Path.Combine(Path.GetTempPath(), "SyncLightBridge");
+            var tempDir = Path.Combine(Path.GetTempPath(), "HdrBridge");
             Directory.CreateDirectory(tempDir);
             _iconPath = Path.Combine(tempDir, "icon.ico");
 

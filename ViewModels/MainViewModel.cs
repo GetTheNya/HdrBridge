@@ -1,13 +1,12 @@
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using SyncLightBridge.Models;
-using SyncLightBridge.Services;
-using System;
 using System.Collections.ObjectModel;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using HdrBridge.Models;
+using HdrBridge.Services;
 
-namespace SyncLightBridge.ViewModels;
+namespace HdrBridge.ViewModels;
 
 public partial class MainViewModel : ObservableObject {
     private readonly UsbController _usbController;
@@ -34,7 +33,8 @@ public partial class MainViewModel : ObservableObject {
     [ObservableProperty] private bool _isHyperHdrServerReachable;
 
     public string SyncToggleMenuHeader => IsServicesEnabled ? "Disable Sync" : "Enable Sync";
-    public string TrayToolTipText => IsServicesEnabled ? "SyncLight Bridge — Syncing" : "SyncLight Bridge — Paused";
+    public string AppVersion => "v1.0.0 (Pre-release)";
+    public string TrayToolTipText => IsServicesEnabled ? "HdrBridge — Syncing" : "HdrBridge — Paused";
     public BitmapFrame TrayIconSource => IsServicesEnabled ? _trayIconActive : _trayIconPaused;
     public bool IsManualMode => !IsServicesEnabled;
 
@@ -118,29 +118,29 @@ public partial class MainViewModel : ObservableObject {
             System.Windows.Application.Current?.Dispatcher?.Invoke(() => OnUsbConnectionChanged(connected));
         };
 
-        _udpListener.ListenerStateChanged += (s, listening) => { System.Windows.Application.Current?.Dispatcher?.Invoke(() => IsUdpListening = listening); };
+        _udpListener.ListenerStateChanged += (s, listening) => { System.Windows.Application.Current?.Dispatcher?.Invoke<bool>(() => IsUdpListening = listening); };
 
         _usbController.RemoteButtonPressed += (s, action) => {
-            System.Windows.Application.Current?.Dispatcher?.Invoke(() => {
+            System.Windows.Application.Current?.Dispatcher?.Invoke((Action)(() => {
                 if (action == RemoteButtonAction.PowerToggle) {
                     _ = RemotePowerToggleWithToastAsync();
                 } else if (action == RemoteButtonAction.StaticColorForce) {
                     if (IsServicesEnabled) _ = ToggleServices();
                     ServicesStatusString = "Manual: Static Color";
                     ServicesStatusColor = "#E51400";
-                    _notifications.Show("SyncLight Bridge", "Ambilight: static color");
+                    _notifications.Show("HdrBridge", "Ambilight: static color");
                 } else if (action == RemoteButtonAction.DynamicEffectForce) {
                     if (IsServicesEnabled) _ = ToggleServices();
                     ServicesStatusString = "Manual: Music Mode";
                     ServicesStatusColor = "#E51400";
-                    _notifications.Show("SyncLight Bridge", "Ambilight: music mode");
+                    _notifications.Show("HdrBridge", "Ambilight: music mode");
                 } else if (action == RemoteButtonAction.UnknownOverrideForce) {
                     if (IsServicesEnabled) _ = ToggleServices();
                     ServicesStatusString = "Manual: Remote Override";
                     ServicesStatusColor = "#E51400";
-                    _notifications.Show("SyncLight Bridge", "Ambilight: remote override");
+                    _notifications.Show("HdrBridge", "Ambilight: remote override");
                 }
-            });
+            }));
         };
 
         _staticColorTimer = new System.Timers.Timer(150); // ~6.6 FPS
@@ -174,17 +174,17 @@ public partial class MainViewModel : ObservableObject {
         _lastConnectionToast = now;
 
         if (connected) {
-            _notifications.Show("SyncLight Bridge", "Controller connected");
+            _notifications.Show("HdrBridge", "Controller connected");
             _ = ApplyCurrentModeAsync();
         } else {
             _udpListener.Stop();
-            _notifications.Show("SyncLight Bridge", "Controller disconnected");
+            _notifications.Show("HdrBridge", "Controller disconnected");
         }
     }
 
     private async Task RemotePowerToggleWithToastAsync() {
         await ToggleServices();
-        _notifications.Show("SyncLight Bridge", IsServicesEnabled ? "Ambilight resumed" : "Ambilight paused");
+        _notifications.Show("HdrBridge", IsServicesEnabled ? "Ambilight resumed" : "Ambilight paused");
     }
 
     partial void OnIsServicesEnabledChanged(bool value) {

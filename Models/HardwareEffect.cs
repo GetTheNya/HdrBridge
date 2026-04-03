@@ -1,4 +1,4 @@
-namespace SyncLightBridge.Models;
+namespace HdrBridge.Models;
 
 public enum AppMode {
     HyperHDRSync,

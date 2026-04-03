@@ -1,9 +1,8 @@
 using System.Windows;
-using System.Linq;
-using SyncLightBridge.Services;
-using SyncLightBridge.ViewModels;
+using HdrBridge.Services;
+using HdrBridge.ViewModels;
 
-namespace SyncLightBridge;
+namespace HdrBridge;
 
 public partial class App : Application {
     public static bool AllowMainWindowClose { get; set; }

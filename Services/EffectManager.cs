@@ -1,8 +1,7 @@
-using System;
 using System.Collections.ObjectModel;
-using SyncLightBridge.Models;
+using HdrBridge.Models;
 
-namespace SyncLightBridge.Services;
+namespace HdrBridge.Services;
 
 public class EffectManager {
     private readonly UsbController _usbController;

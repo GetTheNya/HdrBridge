@@ -1,9 +1,9 @@
-using SyncLightBridge.Models;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using HdrBridge.Models;
 
-namespace SyncLightBridge.Services;
+namespace HdrBridge.Services;
 
 public class UdpListener : IDisposable {
     private UdpClient? _udpClient;

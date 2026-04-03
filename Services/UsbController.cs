@@ -1,8 +1,8 @@
-using HidLibrary;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using HidLibrary;
 
-namespace SyncLightBridge.Services;
+namespace HdrBridge.Services;
 
 public class UsbController : IDisposable {
     private const int VendorId = 0x1A86;

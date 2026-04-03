@@ -1,4 +1,4 @@
-namespace SyncLightBridge.Models;
+namespace HdrBridge.Models;
 
 public class AppSettings {
     public int UdpPort { get; set; } = 19446;

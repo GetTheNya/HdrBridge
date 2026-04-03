@@ -7,9 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Resources\app_hires.ico</ApplicationIcon>
-    <AssemblyName>SyncLightBridge</AssemblyName>
-    <Product>SyncLight Bridge</Product>
-    <Title>SyncLight Bridge</Title>
+    <AssemblyName>HdrBridge</AssemblyName>
+    <Product>HdrBridge</Product>
+    <Title>HdrBridge</Title>
   </PropertyGroup>
 
   <ItemGroup>

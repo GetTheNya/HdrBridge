@@ -1,12 +1,12 @@
-using Microsoft.Win32;
-using SyncLightBridge.Models;
 using System.IO;
 using System.Text.Json;
+using HdrBridge.Models;
+using Microsoft.Win32;
 
-namespace SyncLightBridge.Services;
+namespace HdrBridge.Services;
 
 public class SettingsService {
-    private const string AppName = "SyncLightBridge";
+    private const string AppName = "HdrBridge";
     private const string RunRegistryKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private readonly string _settingsFilePath;
 

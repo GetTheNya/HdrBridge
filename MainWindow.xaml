@@ -1,10 +1,10 @@
-<Window x:Class="SyncLightBridge.MainWindow"
+<Window x:Class="HdrBridge.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
-        xmlns:converters="clr-namespace:SyncLightBridge.Converters"
         xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
-        Title="SyncLight Bridge" Height="700" Width="550"
+        xmlns:hdrBridge="clr-namespace:HdrBridge"
+        Title="HdrBridge" Height="700" Width="550"
         Background="#1E1E1E" Foreground="White"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanMinimize"
@@ -20,10 +20,10 @@
         <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="White"/>
         <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="White"/>
 
-        <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
-        <converters:EnumMatchToVisibilityConverter x:Key="EnumMatchToVisibilityConverter"/>
-        <converters:EnumMatchToBoolConverter x:Key="EnumMatchToBoolConverter"/>
-        <converters:RGBToColorConverter x:Key="RGBToColorConverter"/>
+        <hdrBridge:BoolToColorConverter x:Key="BoolToColorConverter"/>
+        <hdrBridge:EnumMatchToVisibilityConverter x:Key="EnumMatchToVisibilityConverter"/>
+        <hdrBridge:EnumMatchToBoolConverter x:Key="EnumMatchToBoolConverter"/>
+        <hdrBridge:RGBToColorConverter x:Key="RGBToColorConverter"/>
         
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="#E0E0E0"/>
@@ -258,6 +258,31 @@
                         </Button.Resources>
                     </Button>
                 </StackPanel>
+            </TabItem>
+            <!-- ABOUT TAB -->
+            <TabItem Header="About">
+                <Grid Margin="30">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Image Source="pack://application:,,,/Resources/app_hires.ico" Width="80" Height="80" Margin="0,0,0,20">
+                            <Image.Effect>
+                                <DropShadowEffect BlurRadius="15" ShadowDepth="0" Color="#007ACC" Opacity="0.5"/>
+                            </Image.Effect>
+                        </Image>
+                        
+                        <TextBlock Text="HdrBridge" FontSize="28" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,5"/>
+                        <TextBlock Text="{Binding AppVersion}" FontSize="14" Foreground="#888888" HorizontalAlignment="Center" Margin="0,0,0,25"/>
+                        
+                        <Border Height="1" Background="#3F3F46" Margin="0,0,0,25" Width="200"/>
+                        
+                        <TextBlock Text="Developed by GetTheNya" FontSize="16" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                        
+                        <TextBlock HorizontalAlignment="Center" FontSize="14">
+                            <Hyperlink NavigateUri="https://github.com/GetTheNya/HdrBridge" RequestNavigate="Hyperlink_RequestNavigate" Foreground="#007ACC">
+                                GitHub Repository
+                            </Hyperlink>
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
             </TabItem>
         </TabControl>
     </Grid>

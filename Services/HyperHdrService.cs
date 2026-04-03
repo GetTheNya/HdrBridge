@@ -1,11 +1,9 @@
-using System;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
-using System.Diagnostics;
 
-namespace SyncLightBridge.Services;
+namespace HdrBridge.Services;
 
 public class HyperHdrService {
     private readonly HttpClient _httpClient;

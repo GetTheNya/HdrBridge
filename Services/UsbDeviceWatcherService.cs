@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Management;
 
-namespace SyncLightBridge.Services;
+namespace HdrBridge.Services;
 
 /// <summary>
 /// WMI: USB PnP arrival/removal for a specific VID/PID (e.g. HID controller).
