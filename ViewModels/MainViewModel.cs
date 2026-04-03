@@ -214,7 +214,7 @@ public partial class MainViewModel : ObservableObject {
         if (!IsServicesEnabled) {
             _udpListener.Stop();
             _pendingHyperHdrEnable = false;
-            if (await _hyperHdrService.IsServerAvailableAsync())
+            if (IsHyperHdrServerReachable)
                 await _hyperHdrService.SetSyncStateAsync(false);
             await _usbController.SendPowerCommandAsync(false);
             OnPropertyChanged(nameof(CurrentModeString));
@@ -223,9 +223,7 @@ public partial class MainViewModel : ObservableObject {
 
         var mode = SettingsService.CurrentSettings.SelectedMode;
         if (mode == AppMode.HyperHDRSync) {
-            bool available = await _hyperHdrService.IsServerAvailableAsync();
-            IsHyperHdrServerReachable = available;
-            if (available) {
+            if (IsHyperHdrServerReachable) {
                 await _hyperHdrService.SetSyncStateAsync(true);
                 _pendingHyperHdrEnable = false;
             } else {
@@ -234,7 +232,7 @@ public partial class MainViewModel : ObservableObject {
             _udpListener.Start();
         } else {
             _pendingHyperHdrEnable = false;
-            if (await _hyperHdrService.IsServerAvailableAsync())
+            if (IsHyperHdrServerReachable)
                 await _hyperHdrService.SetSyncStateAsync(false);
             _udpListener.Stop();
             if (mode == AppMode.StaticColor) {
