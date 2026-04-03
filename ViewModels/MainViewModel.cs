@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Reflection;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -33,7 +34,14 @@ public partial class MainViewModel : ObservableObject {
     [ObservableProperty] private bool _isHyperHdrServerReachable;
 
     public string SyncToggleMenuHeader => IsServicesEnabled ? "Disable Sync" : "Enable Sync";
-    public string AppVersion => "v1.0.0 (Pre-release)";
+    public string AppVersion {
+        get {
+            var version = Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            if (string.IsNullOrEmpty(version)) return "v1.0.0-dev";
+            if (version.Contains('+')) version = version.Split('+')[0]; // Remove git hash suffix
+            return version.StartsWith("v") ? version : "v" + version;
+        }
+    }
     public string TrayToolTipText => IsServicesEnabled ? "HdrBridge — Syncing" : "HdrBridge — Paused";
     public BitmapFrame TrayIconSource => IsServicesEnabled ? _trayIconActive : _trayIconPaused;
     public bool IsManualMode => !IsServicesEnabled;

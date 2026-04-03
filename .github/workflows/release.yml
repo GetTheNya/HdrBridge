@@ -1,0 +1,57 @@
+name: HdrBridge Build & Release
+
+on:
+  push:
+    branches: [ "main" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Restore dependencies
+      run: dotnet restore HdrBridge.sln
+
+    - name: Build
+      run: dotnet build --no-restore -c Release HdrBridge.sln
+
+    - name: Set Version
+      id: version
+      shell: pwsh
+      run: |
+        $ver = "${{ github.ref_name }}"
+        $numericVer = ($ver -replace '^v', '')
+        if ("${{ github.ref_type }}" -ne "tag") { $numericVer = "0.0.0"; $ver = "0.0.0-dev" }
+        echo "VAL=$ver" >> $env:GITHUB_OUTPUT
+        echo "NUM=$numericVer" >> $env:GITHUB_OUTPUT
+
+    - name: Publish
+      run: dotnet publish HdrBridge.csproj -c Release -r win-x64 --self-contained false -p:Version=${{ steps.version.outputs.NUM }} -p:InformationalVersion=${{ steps.version.outputs.VAL }} -o ./publish/HdrBridge
+
+    - name: Zip Artifact
+      shell: pwsh
+      run: |
+        Compress-Archive -Path ./publish/HdrBridge/* -DestinationPath HdrBridge-win-x64.zip
+
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          HdrBridge-win-x64.zip
+        body: "HdrBridge Release - Automated Build"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
