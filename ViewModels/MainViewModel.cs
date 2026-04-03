@@ -11,6 +11,7 @@ public partial class MainViewModel : ObservableObject {
     private readonly UdpListener _udpListener;
     public SettingsService SettingsService { get; }
     private readonly EffectManager _effectManager;
+    private readonly HyperHdrService _hyperHdrService;
 
     [ObservableProperty] private bool _isUsbConnected;
     [ObservableProperty] private bool _isUdpListening;
@@ -83,11 +84,13 @@ public partial class MainViewModel : ObservableObject {
         UsbController usbController,
         UdpListener udpListener,
         SettingsService settingsService,
-        EffectManager effectManager) {
+        EffectManager effectManager,
+        HyperHdrService hyperHdrService) {
         _usbController = usbController;
         _udpListener = udpListener;
         SettingsService = settingsService;
         _effectManager = effectManager;
+        _hyperHdrService = hyperHdrService;
 
         AvailableEffects = new ObservableCollection<HardwareEffect>(_effectManager.AvailableEffects);
         SelectedHardwareEffect = AvailableEffects.FirstOrDefault();
@@ -201,6 +204,7 @@ public partial class MainViewModel : ObservableObject {
     public async Task ApplyCurrentModeAsync() {
         if (!IsServicesEnabled) {
             _udpListener.Stop();
+            await _hyperHdrService.SetSyncStateAsync(false);
             await _usbController.SendPowerCommandAsync(false);
             OnPropertyChanged(nameof(CurrentModeString));
             return;
@@ -208,8 +212,10 @@ public partial class MainViewModel : ObservableObject {
 
         var mode = SettingsService.CurrentSettings.SelectedMode;
         if (mode == AppMode.HyperHDRSync) {
+            await _hyperHdrService.SetSyncStateAsync(true);
             _udpListener.Start();
         } else {
+            await _hyperHdrService.SetSyncStateAsync(false);
             _udpListener.Stop();
             if (mode == AppMode.StaticColor) {
                 SendStaticColorFrame();
