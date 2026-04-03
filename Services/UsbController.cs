@@ -220,6 +220,68 @@ public class UsbController : IDisposable {
         SendRawFrameInternal(black);
     }
 
+    public async Task SendPowerCommandAsync(bool turnOn, byte r = 255, byte g = 255, byte b = 255) {
+        if (!IsConnected || _device == null) return;
+
+        if (!turnOn) {
+            r = 0; g = 0; b = 0;
+        }
+
+        // Packet 1: Handshake
+        byte[] pkt1 = new byte[64];
+        pkt1[0] = 0x52;
+        pkt1[1] = 0x42;
+        pkt1[2] = 0x06;
+        pkt1[3] = _currentSeq;
+        pkt1[4] = 0x97;
+        
+        int crc1 = 0;
+        for (int i = 0; i <= 4; i++) crc1 += pkt1[i];
+        pkt1[5] = (byte)(crc1 & 0xFF);
+        
+        _currentSeq = (byte)((_currentSeq + 1) & 0xFF);
+        if (_currentSeq == 0) _currentSeq = 1;
+
+        byte[] report1 = new byte[65];
+        report1[0] = 0x00;
+        Array.Copy(pkt1, 0, report1, 1, 64);
+        _device.Write(report1);
+
+        await Task.Delay(50); // Delay for hardware processing
+
+        // Packet 2: State Change
+        byte[] pkt2 = new byte[64];
+        pkt2[0] = 0x52;
+        pkt2[1] = 0x42;
+        pkt2[2] = 0x10;
+        pkt2[3] = _currentSeq;
+        pkt2[4] = 0x86;
+        pkt2[5] = 0x01;
+        pkt2[6] = r;
+        pkt2[7] = g;
+        pkt2[8] = b;
+        pkt2[9] = 0x41;
+        pkt2[10] = 0x42;
+        pkt2[11] = 0x00;
+        pkt2[12] = 0x00;
+        pkt2[13] = 0x00;
+        pkt2[14] = 0xFE;
+        
+        int crc2 = 0;
+        for (int i = 0; i <= 14; i++) crc2 += pkt2[i];
+        pkt2[15] = (byte)(crc2 & 0xFF);
+        
+        _currentSeq = (byte)((_currentSeq + 1) & 0xFF);
+        if (_currentSeq == 0) _currentSeq = 1;
+
+        byte[] report2 = new byte[65];
+        report2[0] = 0x00;
+        Array.Copy(pkt2, 0, report2, 1, 64);
+        _device.Write(report2);
+        
+        Debug.WriteLine($"Sent power command: {(turnOn ? "ON" : "OFF")}");
+    }
+
     public void Dispose() {
         _cancellationTokenSource.Cancel();
         _device?.Dispose();

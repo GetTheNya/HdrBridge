@@ -49,7 +49,7 @@ public partial class MainViewModel : ObservableObject {
                 SettingsService.CurrentSettings.SelectedMode = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CurrentModeString));
-                ApplyCurrentMode();
+                _ = ApplyCurrentModeAsync();
             }
         }
     }
@@ -85,7 +85,7 @@ public partial class MainViewModel : ObservableObject {
 
         _usbController.PhysicalButtonPressed += (s, e) => {
             System.Windows.Application.Current?.Dispatcher?.Invoke(() => {
-                ToggleServices();
+                _ = ToggleServices();
             });
         };
 
@@ -102,30 +102,32 @@ public partial class MainViewModel : ObservableObject {
     }
 
     [RelayCommand]
-    public void ActivateHyperHDR() {
+    public async Task ActivateHyperHDR() {
         SettingsService.CurrentSettings.SelectedMode = AppMode.HyperHDRSync;
-        ApplyCurrentMode();
+        await ApplyCurrentModeAsync();
         OnPropertyChanged(nameof(CurrentModeString));
     }
 
     [RelayCommand]
-    public void ActivateHardwareMode() {
+    public async Task ActivateHardwareMode() {
         SettingsService.CurrentSettings.SelectedMode = AppMode.HardwareEffect;
-        ApplyCurrentMode();
+        await ApplyCurrentModeAsync();
         OnPropertyChanged(nameof(CurrentModeString));
     }
 
     [RelayCommand]
-    public void ToggleServices() {
+    public async Task ToggleServices() {
         IsServicesEnabled = !IsServicesEnabled;
         _usbController.IsHardwareOverridden = !IsServicesEnabled;
         ServicesStatusString = IsServicesEnabled ? "🟢 System Active" : "🔴 System Offline";
         
         if (!IsServicesEnabled) {
-            _usbController.SendBlackFrame();
+            await _usbController.SendPowerCommandAsync(false);
+        } else {
+            await _usbController.SendPowerCommandAsync(true, StaticColorR, StaticColorG, StaticColorB);
         }
         
-        ApplyCurrentMode();
+        await ApplyCurrentModeAsync();
     }
 
     partial void OnHardwareEffectSpeedChanged(byte value) {
@@ -168,10 +170,10 @@ public partial class MainViewModel : ObservableObject {
     }
     
 
-    public void ApplyCurrentMode() {
+    public async Task ApplyCurrentModeAsync() {
         if (!IsServicesEnabled) {
             _udpListener.Stop();
-            _usbController.SendBlackFrame();
+            await _usbController.SendPowerCommandAsync(false);
             OnPropertyChanged(nameof(CurrentModeString));
             return;
         }
@@ -195,7 +197,7 @@ public partial class MainViewModel : ObservableObject {
     partial void OnSelectedHardwareEffectChanged(HardwareEffect? value) {
         OnPropertyChanged(nameof(SliderLabel));
         if (SettingsService.CurrentSettings.SelectedMode == AppMode.HardwareEffect) {
-            ApplyCurrentMode();
+            _ = ApplyCurrentModeAsync();
         }
     }
 

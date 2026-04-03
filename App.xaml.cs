@@ -24,7 +24,7 @@ public partial class App : Application {
         MainViewModel = new MainViewModel(UsbController, UdpListener, SettingsService, EffectManager);
 
         UdpListener.Start();
-        MainViewModel.ApplyCurrentMode();
+        _ = MainViewModel.ApplyCurrentModeAsync();
 
         _mainWindow = new MainWindow {
             DataContext = MainViewModel
