@@ -6,6 +6,8 @@ using SyncLightBridge.ViewModels;
 namespace SyncLightBridge;
 
 public partial class App : Application {
+    public static bool AllowMainWindowClose { get; set; }
+
     public static UsbController UsbController { get; private set; } = null!;
     public static UdpListener UdpListener { get; private set; } = null!;
     public static SettingsService SettingsService { get; private set; } = null!;
@@ -33,6 +35,8 @@ public partial class App : Application {
         };
 
         _mainWindow.Closing += (s, args) => {
+            if (AllowMainWindowClose)
+                return;
             args.Cancel = true;
             _mainWindow.Hide();
         };
@@ -46,7 +50,9 @@ public partial class App : Application {
         UdpListener?.Stop();
         
         try {
-            HyperHdrService?.SetSyncStateAsync(false).GetAwaiter().GetResult();
+            if (MainViewModel.IsHyperHdrServerReachable) {
+                HyperHdrService.SetSyncStateAsync(false).ConfigureAwait(false).GetAwaiter().GetResult();
+            }
         } catch { }
 
         UsbController?.Dispose();

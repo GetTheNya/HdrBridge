@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using SyncLightBridge.Models;
 using SyncLightBridge.Services;
 using System.Collections.ObjectModel;
+using System.Windows.Threading;
 
 namespace SyncLightBridge.ViewModels;
 
@@ -25,6 +26,7 @@ public partial class MainViewModel : ObservableObject {
     [ObservableProperty] private byte _staticColorB = 255;
     [ObservableProperty] private byte _hardwareEffectSpeed = 127;
     [ObservableProperty] private string _lastSentEffectId = "None";
+    [ObservableProperty] private bool _isHyperHdrServerReachable;
     
     public string SliderLabel => SelectedHardwareEffect?.Category == EffectCategory.Rhythm ? "Microphone Sensitivity" : "Effect Speed / Intensity";
 
@@ -41,6 +43,8 @@ public partial class MainViewModel : ObservableObject {
     }
 
     private readonly System.Timers.Timer _staticColorTimer;
+    private readonly DispatcherTimer _hyperHdrHeartbeatTimer;
+    private bool _pendingHyperHdrEnable;
 
     public ObservableCollection<HardwareEffect> AvailableEffects { get; }
 
@@ -127,6 +131,11 @@ public partial class MainViewModel : ObservableObject {
         };
         _staticColorTimer.Start();
 
+        _hyperHdrHeartbeatTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _hyperHdrHeartbeatTimer.Tick += async (_, _) => await OnHyperHdrHeartbeatAsync();
+        _hyperHdrHeartbeatTimer.Start();
+        _ = OnHyperHdrHeartbeatAsync();
+
         IsUsbConnected = _usbController.IsConnected;
         IsUdpListening = _udpListener.IsListening;
     }
@@ -204,7 +213,9 @@ public partial class MainViewModel : ObservableObject {
     public async Task ApplyCurrentModeAsync() {
         if (!IsServicesEnabled) {
             _udpListener.Stop();
-            await _hyperHdrService.SetSyncStateAsync(false);
+            _pendingHyperHdrEnable = false;
+            if (await _hyperHdrService.IsServerAvailableAsync())
+                await _hyperHdrService.SetSyncStateAsync(false);
             await _usbController.SendPowerCommandAsync(false);
             OnPropertyChanged(nameof(CurrentModeString));
             return;
@@ -212,10 +223,19 @@ public partial class MainViewModel : ObservableObject {
 
         var mode = SettingsService.CurrentSettings.SelectedMode;
         if (mode == AppMode.HyperHDRSync) {
-            await _hyperHdrService.SetSyncStateAsync(true);
+            bool available = await _hyperHdrService.IsServerAvailableAsync();
+            IsHyperHdrServerReachable = available;
+            if (available) {
+                await _hyperHdrService.SetSyncStateAsync(true);
+                _pendingHyperHdrEnable = false;
+            } else {
+                _pendingHyperHdrEnable = true;
+            }
             _udpListener.Start();
         } else {
-            await _hyperHdrService.SetSyncStateAsync(false);
+            _pendingHyperHdrEnable = false;
+            if (await _hyperHdrService.IsServerAvailableAsync())
+                await _hyperHdrService.SetSyncStateAsync(false);
             _udpListener.Stop();
             if (mode == AppMode.StaticColor) {
                 SendStaticColorFrame();
@@ -226,6 +246,20 @@ public partial class MainViewModel : ObservableObject {
 
         SettingsService.SaveSettings();
         OnPropertyChanged(nameof(CurrentModeString));
+    }
+
+    private async Task OnHyperHdrHeartbeatAsync() {
+        bool available = await _hyperHdrService.IsServerAvailableAsync();
+        IsHyperHdrServerReachable = available;
+
+        if (!IsServicesEnabled || CurrentMode != AppMode.HyperHDRSync)
+            return;
+
+        if (_pendingHyperHdrEnable && available) {
+            await _hyperHdrService.SetSyncStateAsync(true);
+            _pendingHyperHdrEnable = false;
+            _udpListener.Start();
+        }
     }
 
     partial void OnSelectedHardwareEffectChanged(HardwareEffect? value) {

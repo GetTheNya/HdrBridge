@@ -1,4 +1,6 @@
+using System;
 using System.Windows;
+using System.Windows.Threading;
 using H.NotifyIcon;
 
 namespace SyncLightBridge;
@@ -21,7 +23,11 @@ public partial class MainWindow : Window {
     }
 
     private void MenuItem_Exit_Click(object sender, RoutedEventArgs e) {
-        TrayIcon?.Dispose();
-        Application.Current.Shutdown();
+        // Return first so the tray context menu can close; then exit on the next idle pass.
+        Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => {
+            App.AllowMainWindowClose = true;
+            TrayIcon?.Dispose();
+            Application.Current.Shutdown();
+        }));
     }
 }

@@ -134,6 +134,22 @@
                         <Ellipse Width="12" Height="12" Fill="{Binding IsUdpListening, Converter={StaticResource BoolToColorConverter}}" Margin="0,0,8,0"/>
                         <TextBlock Text="UDP Listening" FontWeight="SemiBold"/>
                     </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Ellipse Width="12" Height="12" Fill="{Binding IsHyperHdrServerReachable, Converter={StaticResource BoolToColorConverter}}" Margin="0,0,8,0"/>
+                        <TextBlock FontWeight="SemiBold">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="HyperHDR API: unreachable"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsHyperHdrServerReachable}" Value="True">
+                                            <Setter Property="Text" Value="HyperHDR API: reachable"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
                 </StackPanel>
                 
                 <Button Grid.Column="1" Command="{Binding ToggleServicesCommand}" Foreground="White" BorderThickness="0" Padding="12,8" Cursor="Hand" VerticalAlignment="Center">

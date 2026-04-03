@@ -17,6 +17,22 @@ public class HyperHdrService {
         _settingsService = settingsService;
     }
 
+    /// <summary>
+    /// Returns true if the HyperHDR JSON-RPC endpoint responds (serverinfo).
+    /// </summary>
+    public async Task<bool> IsServerAvailableAsync() {
+        try {
+            string url = _settingsService.CurrentSettings.HyperHdrApiUrl;
+            var payload = new { command = "serverinfo", tan = 1 };
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            using var response = await _httpClient.PostAsync(url, content).ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
+        } catch (Exception ex) {
+            Debug.WriteLine($"HyperHdr availability check: {ex.Message}");
+            return false;
+        }
+    }
+
     public async Task SetSyncStateAsync(bool enable) {
         try {
             string url = _settingsService.CurrentSettings.HyperHdrApiUrl;
@@ -45,7 +61,7 @@ public class HyperHdrService {
                 _httpClient.PostAsync(url, content2)
             };
 
-            await Task.WhenAll(tasks);
+            await Task.WhenAll(tasks).ConfigureAwait(false);
             Debug.WriteLine($"HyperHDR State Overridden -> SYSTEM/VIDEO GRABBER & LEDDEVICE: {enable}");
         } catch (Exception ex) {
             Debug.WriteLine($"HyperHdr API Error: {ex.Message}");
