@@ -160,8 +160,19 @@ public partial class MainViewModel : ObservableObject {
         IsUdpListening = _udpListener.IsListening;
     }
 
+    private DateTime _lastConnectionToast = DateTime.MinValue;
+    private bool _lastConnectionState;
+
     private void OnUsbConnectionChanged(bool connected) {
         IsUsbConnected = connected;
+
+        // Debounce: USB devices often fire multiple connection events during enumeration
+        var now = DateTime.UtcNow;
+        if (connected == _lastConnectionState && (now - _lastConnectionToast).TotalSeconds < 2)
+            return;
+        _lastConnectionState = connected;
+        _lastConnectionToast = now;
+
         if (connected) {
             _notifications.Show("SyncLight Bridge", "Controller connected");
             _ = ApplyCurrentModeAsync();
