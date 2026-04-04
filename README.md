@@ -31,6 +31,7 @@ If you own this hardware, you know the pain: the official "SyncLight" app is res
 * **🔘 Physical Remote Sync:** Unlike other apps, HdrBridge listens to your physical remote. Press "Power" on the cord, and the app automatically pauses HyperHDR streams.
 * **🔧 Auto-Healing:** Robust USB monitoring — plug or unplug your device, and the bridge recovers instantly.
 * **👻 Tray Resident:** Runs silently in the background with auto-start capability.
+* **🌿 Smart Eco-System:** Intelligent auto-power management. The LEDs won't waste their lifespan when you are away or when your display enters power-saving mode.
 * **🎛️ Hardware Effect Control:** Trigger the strip's built-in hardware effects (Rainbow, Breathing, Static Colors) directly from the app.
 
 ## 🛠️ How It Works
