@@ -14,6 +14,7 @@ public partial class App : Application {
     public static HyperHdrService HyperHdrService { get; private set; } = null!;
     public static MainViewModel MainViewModel { get; private set; } = null!;
     public static NotificationService NotificationService { get; private set; } = null!;
+    public static SystemPowerService SystemPowerService { get; private set; } = null!;
 
     private MainWindow? _mainWindow;
     private UsbDeviceWatcherService? _usbDeviceWatcher;
@@ -28,7 +29,8 @@ public partial class App : Application {
         EffectManager = new EffectManager(UsbController);
         UdpListener = new UdpListener(UsbController, SettingsService);
         HyperHdrService = new HyperHdrService(SettingsService);
-        MainViewModel = new MainViewModel(UsbController, UdpListener, SettingsService, EffectManager, HyperHdrService, NotificationService);
+        SystemPowerService = new SystemPowerService();
+        MainViewModel = new MainViewModel(UsbController, UdpListener, SettingsService, EffectManager, HyperHdrService, NotificationService, SystemPowerService);
 
         _usbDeviceWatcher = new UsbDeviceWatcherService(0x1A86, 0xFE07,
             onInserted: () => Current.Dispatcher.Invoke(() => UsbController.TryConnect()),
@@ -63,6 +65,7 @@ public partial class App : Application {
         } catch { }
 
         _usbDeviceWatcher?.Dispose();
+        MainViewModel?.Cleanup();
         UsbController?.Dispose();
         base.OnExit(e);
     }

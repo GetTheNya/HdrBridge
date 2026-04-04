@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Reflection;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -16,8 +17,10 @@ public partial class MainViewModel : ObservableObject {
     public SettingsService SettingsService { get; }
     private readonly EffectManager _effectManager;
     private readonly HyperHdrService _hyperHdrService;
+    private readonly SystemPowerService _systemPowerService;
     private readonly BitmapFrame _trayIconActive;
     private readonly BitmapFrame _trayIconPaused;
+    private bool _isSuspendedBySystem;
 
     [ObservableProperty] private bool _isUsbConnected;
     [ObservableProperty] private bool _isUdpListening;
@@ -110,13 +113,15 @@ public partial class MainViewModel : ObservableObject {
         SettingsService settingsService,
         EffectManager effectManager,
         HyperHdrService hyperHdrService,
-        NotificationService notificationService) {
+        NotificationService notificationService,
+        SystemPowerService systemPowerService) {
         _usbController = usbController;
         _udpListener = udpListener;
         SettingsService = settingsService;
         _effectManager = effectManager;
         _hyperHdrService = hyperHdrService;
         _notifications = notificationService;
+        _systemPowerService = systemPowerService;
 
         _trayIconActive = BitmapFrame.Create(new Uri("pack://application:,,,/Resources/app.ico"));
         _trayIconPaused = BitmapFrame.Create(new Uri("pack://application:,,,/Resources/tray_paused.ico"));
@@ -174,6 +179,16 @@ public partial class MainViewModel : ObservableObject {
         StaticColorG = SettingsService.CurrentSettings.StaticColorG;
         StaticColorB = SettingsService.CurrentSettings.StaticColorB;
         HardwareEffectSpeed = SettingsService.CurrentSettings.HardwareEffectSpeed;
+
+        _systemPowerService.SystemSuspendChanged += (_, suspended) => {
+            System.Windows.Application.Current?.Dispatcher?.Invoke(() => {
+                if (suspended)
+                    _ = SystemSuspendAsync();
+                else
+                    _ = SystemResumeAsync();
+            });
+        };
+        _systemPowerService.Start();
     }
 
     private DateTime _lastConnectionToast = DateTime.MinValue;
@@ -378,5 +393,34 @@ public partial class MainViewModel : ObservableObject {
 
         _udpListener.Stop();
         _ = ApplyCurrentModeAsync();
+    }
+
+    // --- Stealth Mode: System suspend/resume ---
+
+    private async Task SystemSuspendAsync() {
+        if (!SettingsService.CurrentSettings.AutoOffOnLockSleep) return;
+        if (!IsServicesEnabled) return; // already off, nothing to do
+        if (_isSuspendedBySystem) return; // already suspended
+
+        _isSuspendedBySystem = true;
+        Debug.WriteLine("Stealth: suspending LEDs (lock/monitor off)");
+
+        if (IsHyperHdrServerReachable)
+            await _hyperHdrService.SetSyncStateAsync(false);
+        _udpListener.Stop();
+        await _usbController.SendPowerCommandAsync(false);
+    }
+
+    private async Task SystemResumeAsync() {
+        if (!_isSuspendedBySystem) return; // we didn't suspend, don't resume
+        _isSuspendedBySystem = false;
+        Debug.WriteLine("Stealth: resuming LEDs (unlock/monitor on)");
+
+        await _usbController.SendPowerCommandAsync(true, StaticColorR, StaticColorG, StaticColorB);
+        await ApplyCurrentModeAsync();
+    }
+
+    public void Cleanup() {
+        _systemPowerService.Dispose();
     }
 }

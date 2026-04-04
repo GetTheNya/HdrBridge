@@ -12,4 +12,5 @@ public class AppSettings {
     public byte StaticColorB { get; set; } = 255;
     public byte HardwareEffectSpeed { get; set; } = 127;
     public byte SelectedEffectId { get; set; } = 0;
+    public bool AutoOffOnLockSleep { get; set; } = true;
 }

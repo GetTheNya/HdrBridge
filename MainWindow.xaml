@@ -262,7 +262,10 @@
                     <TextBlock Text="LED Count" Margin="0,0,0,5" FontWeight="SemiBold"/>
                     <TextBox Text="{Binding SettingsService.CurrentSettings.LedCount, UpdateSourceTrigger=PropertyChanged}"/>
 
-                    <CheckBox Content="Run at Windows startup" IsChecked="{Binding SettingsService.CurrentSettings.StartWithWindows}" Foreground="White" Margin="0,15,0,30"
+                    <CheckBox Content="Run at Windows startup" IsChecked="{Binding SettingsService.CurrentSettings.StartWithWindows}" Foreground="White" Margin="0,15,0,10"
+                              Checked="StartupCheckBox_Changed" Unchecked="StartupCheckBox_Changed"/>
+
+                    <CheckBox Content="Auto-off on Lock / Monitor Sleep" IsChecked="{Binding SettingsService.CurrentSettings.AutoOffOnLockSleep}" Foreground="White" Margin="0,0,0,30"
                               Checked="StartupCheckBox_Changed" Unchecked="StartupCheckBox_Changed"/>
 
                     <Button Content="Apply &amp; Save Settings" Command="{Binding SaveSettingsCommand}" Background="#007ACC" Foreground="White" BorderThickness="0" Padding="12" Cursor="Hand" FontSize="14" FontWeight="SemiBold">
