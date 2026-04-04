@@ -65,4 +65,22 @@ public class HyperHdrService {
             Debug.WriteLine($"HyperHdr API Error: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Sets the global brightness gain on the HyperHDR server (0-100).
+    /// </summary>
+    public async Task SetBrightnessAsync(int brightnessPercentage) {
+        try {
+            string url = _settingsService.CurrentSettings.HyperHdrApiUrl;
+            var payload = new {
+                command = "adjustment",
+                adjustment = new { classic_config = true, luminanceGain = Math.Clamp(brightnessPercentage, 0, 100) / 100f }
+            };
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            await _httpClient.PostAsync(url, content).ConfigureAwait(false);
+            Debug.WriteLine($"HyperHDR brightness set to {brightnessPercentage}%");
+        } catch (Exception ex) {
+            Debug.WriteLine($"HyperHdr brightness error: {ex.Message}");
+        }
+    }
 }

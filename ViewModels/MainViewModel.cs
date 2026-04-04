@@ -32,6 +32,7 @@ public partial class MainViewModel : ObservableObject {
     [ObservableProperty] private byte _hardwareEffectSpeed = 127;
     [ObservableProperty] private string _lastSentEffectId = "None";
     [ObservableProperty] private bool _isHyperHdrServerReachable;
+    [ObservableProperty] private int _hyperHdrMaxBrightness = 100;
 
     public string SyncToggleMenuHeader => IsServicesEnabled ? "Disable Sync" : "Enable Sync";
     public string AppVersion {
@@ -63,6 +64,7 @@ public partial class MainViewModel : ObservableObject {
     private readonly System.Timers.Timer _staticColorTimer;
     private readonly DispatcherTimer _hyperHdrHeartbeatTimer;
     private bool _pendingHyperHdrEnable;
+    private CancellationTokenSource? _brightnessDebounceCts;
 
     public ObservableCollection<HardwareEffect> AvailableEffects { get; }
 
@@ -120,7 +122,8 @@ public partial class MainViewModel : ObservableObject {
         _trayIconPaused = BitmapFrame.Create(new Uri("pack://application:,,,/Resources/tray_paused.ico"));
 
         AvailableEffects = new ObservableCollection<HardwareEffect>(_effectManager.AvailableEffects);
-        SelectedHardwareEffect = AvailableEffects.FirstOrDefault();
+        SelectedHardwareEffect = AvailableEffects.FirstOrDefault(e => e.EffectId == SettingsService.CurrentSettings.SelectedEffectId)
+                                 ?? AvailableEffects.FirstOrDefault();
 
         _usbController.ConnectionChanged += (s, connected) => {
             System.Windows.Application.Current?.Dispatcher?.Invoke(() => OnUsbConnectionChanged(connected));
@@ -166,6 +169,11 @@ public partial class MainViewModel : ObservableObject {
 
         IsUsbConnected = _usbController.IsConnected;
         IsUdpListening = _udpListener.IsListening;
+        HyperHdrMaxBrightness = SettingsService.CurrentSettings.HyperHdrBrightness;
+        StaticColorR = SettingsService.CurrentSettings.StaticColorR;
+        StaticColorG = SettingsService.CurrentSettings.StaticColorG;
+        StaticColorB = SettingsService.CurrentSettings.StaticColorB;
+        HardwareEffectSpeed = SettingsService.CurrentSettings.HardwareEffectSpeed;
     }
 
     private DateTime _lastConnectionToast = DateTime.MinValue;
@@ -240,13 +248,37 @@ public partial class MainViewModel : ObservableObject {
         if (CurrentMode == AppMode.HardwareEffect && IsServicesEnabled && SelectedHardwareEffect != null) {
              _effectManager.SetEffectSpeed(SelectedHardwareEffect, value);
         }
+        SettingsService.CurrentSettings.HardwareEffectSpeed = value;
+        SettingsService.SaveSettings();
     }
 
 
 
-    partial void OnStaticColorRChanged(byte value) { OnPropertyChanged(nameof(StaticColorMedia)); }
-    partial void OnStaticColorGChanged(byte value) { OnPropertyChanged(nameof(StaticColorMedia)); }
-    partial void OnStaticColorBChanged(byte value) { OnPropertyChanged(nameof(StaticColorMedia)); }
+    partial void OnHyperHdrMaxBrightnessChanged(int value) {
+        _brightnessDebounceCts?.Cancel();
+        _brightnessDebounceCts = new CancellationTokenSource();
+        var token = _brightnessDebounceCts.Token;
+        _ = Task.Run(async () => {
+            try {
+                await Task.Delay(300, token);
+                if (IsHyperHdrServerReachable)
+                    await _hyperHdrService.SetBrightnessAsync(value);
+                SettingsService.CurrentSettings.HyperHdrBrightness = value;
+                SettingsService.SaveSettings();
+            } catch (TaskCanceledException) { /* debounce: superseded by newer value */ }
+        });
+    }
+
+    partial void OnStaticColorRChanged(byte value) { OnPropertyChanged(nameof(StaticColorMedia)); SaveStaticColor(); }
+    partial void OnStaticColorGChanged(byte value) { OnPropertyChanged(nameof(StaticColorMedia)); SaveStaticColor(); }
+    partial void OnStaticColorBChanged(byte value) { OnPropertyChanged(nameof(StaticColorMedia)); SaveStaticColor(); }
+
+    private void SaveStaticColor() {
+        SettingsService.CurrentSettings.StaticColorR = StaticColorR;
+        SettingsService.CurrentSettings.StaticColorG = StaticColorG;
+        SettingsService.CurrentSettings.StaticColorB = StaticColorB;
+        SettingsService.SaveSettings();
+    }
 
     private void SendStaticColorFrame() {
         int count = SettingsService.CurrentSettings.LedCount;
@@ -291,6 +323,7 @@ public partial class MainViewModel : ObservableObject {
         if (mode == AppMode.HyperHDRSync) {
             if (IsHyperHdrServerReachable) {
                 await _hyperHdrService.SetSyncStateAsync(true);
+                await _hyperHdrService.SetBrightnessAsync(HyperHdrMaxBrightness);
                 _pendingHyperHdrEnable = false;
             } else {
                 _pendingHyperHdrEnable = true;
@@ -321,6 +354,7 @@ public partial class MainViewModel : ObservableObject {
 
         if (_pendingHyperHdrEnable && available) {
             await _hyperHdrService.SetSyncStateAsync(true);
+            await _hyperHdrService.SetBrightnessAsync(HyperHdrMaxBrightness);
             _pendingHyperHdrEnable = false;
             _udpListener.Start();
         }
@@ -328,6 +362,10 @@ public partial class MainViewModel : ObservableObject {
 
     partial void OnSelectedHardwareEffectChanged(HardwareEffect? value) {
         OnPropertyChanged(nameof(SliderLabel));
+        if (value != null) {
+            SettingsService.CurrentSettings.SelectedEffectId = value.EffectId;
+            SettingsService.SaveSettings();
+        }
         if (SettingsService.CurrentSettings.SelectedMode == AppMode.HardwareEffect) {
             _ = ApplyCurrentModeAsync();
         }

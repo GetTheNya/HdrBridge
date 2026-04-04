@@ -202,6 +202,18 @@
                         <Border Background="#1E1E1E" CornerRadius="8" Padding="15">
                             <TextBlock Text="{Binding SettingsService.CurrentSettings.UdpPort, StringFormat='Listening on UDP {0}...'}" FontWeight="SemiBold" Foreground="#007ACC" HorizontalAlignment="Center"/>
                         </Border>
+
+                        <!-- Max Brightness Slider -->
+                        <TextBlock Margin="0,25,0,0" FontWeight="SemiBold">
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="Max Brightness: {0}%">
+                                    <Binding Path="HyperHdrMaxBrightness"/>
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                        <Slider Minimum="0" Maximum="100" Value="{Binding HyperHdrMaxBrightness, Delay=150}" 
+                                IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,5,0,0"
+                                IsEnabled="{Binding IsHyperHdrServerReachable}"/>
                     </StackPanel>
 
                     <!-- Dynamic Layer: Solid Color Picker -->
@@ -226,7 +238,14 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
                         
-                        <TextBlock Text="{Binding SliderLabel}" />
+                        <TextBlock>
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="{}{0}: {1}%">
+                                    <Binding Path="SliderLabel"/>
+                                    <Binding Path="HardwareEffectSpeed"/>
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
                         <Slider Minimum="0" Maximum="100" Value="{Binding HardwareEffectSpeed, Delay=100}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,20" />
                         
                     </StackPanel>
