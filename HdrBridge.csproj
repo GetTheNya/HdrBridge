@@ -10,6 +10,7 @@
     <AssemblyName>HdrBridge</AssemblyName>
     <Product>HdrBridge</Product>
     <Title>HdrBridge</Title>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
