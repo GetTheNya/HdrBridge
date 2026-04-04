@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Reflection;
+using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -46,9 +47,18 @@ public partial class MainViewModel : ObservableObject {
             return version.StartsWith("v") ? version : "v" + version;
         }
     }
+
+    /// <summary>
+    /// Label shown on the big toggle button.
+    /// Three states: no controller → "Connect Strip", active → "Disable Sync", paused → "Enable Sync".
+    /// </summary>
+    public string ServicesButtonLabel =>
+        !IsUsbConnected ? "Connect Strip" :
+        IsServicesEnabled ? "Disable Sync" : "Enable Sync";
+
+    public bool IsManualMode => !IsServicesEnabled;
     public string TrayToolTipText => IsServicesEnabled ? "HdrBridge — Syncing" : "HdrBridge — Paused";
     public BitmapFrame TrayIconSource => IsServicesEnabled ? _trayIconActive : _trayIconPaused;
-    public bool IsManualMode => !IsServicesEnabled;
 
     public string SliderLabel => SelectedHardwareEffect?.Category == EffectCategory.Rhythm ? "Microphone Sensitivity" : "Effect Speed / Intensity";
 
@@ -87,24 +97,26 @@ public partial class MainViewModel : ObservableObject {
 
     public string CurrentModeString {
         get {
+            if (!IsUsbConnected) return "No Controller";
             if (!IsServicesEnabled) return "System Disabled";
             return SettingsService.CurrentSettings.SelectedMode switch {
-                AppMode.HyperHDRSync => "Mode: HyperHDR Sync Active",
-                AppMode.StaticColor => "Mode: Static Color Active",
-                AppMode.HardwareEffect => "Mode: Hardware Effect Active",
-                _ => "Unknown"
+                AppMode.HyperHDRSync    => "Mode: HyperHDR Sync Active",
+                AppMode.StaticColor     => "Mode: Static Color Active",
+                AppMode.HardwareEffect  => "Mode: Hardware Effect Active",
+                _                       => "Unknown"
             };
         }
     }
 
     public string CurrentModeColor {
         get {
+            if (!IsUsbConnected) return "#E51400"; // Red — no strip
             if (!IsServicesEnabled) return "#888888";
             return SettingsService.CurrentSettings.SelectedMode switch {
-                AppMode.HyperHDRSync => "#60A917", // Green
-                AppMode.StaticColor => "#0050EF", // Blue
+                AppMode.HyperHDRSync   => "#60A917", // Green
+                AppMode.StaticColor    => "#0050EF", // Blue
                 AppMode.HardwareEffect => "#AA00FF", // Purple
-                _ => "#888888"
+                _                      => "#888888"
             };
         }
     }
@@ -175,6 +187,15 @@ public partial class MainViewModel : ObservableObject {
         StaticColorB = SettingsService.CurrentSettings.StaticColorB;
         HardwareEffectSpeed = SettingsService.CurrentSettings.HardwareEffectSpeed;
 
+        // If no strip is connected at launch, start in a fully disabled state.
+        // Services will be re-enabled automatically by OnUsbConnectionChanged when the strip is plugged in.
+        if (!IsUsbConnected) {
+            IsServicesEnabled = false;
+            _usbController.IsHardwareOverridden = true;
+            ServicesStatusString = "No Controller";
+            ServicesStatusColor  = "#E51400";
+        }
+
         // Initialize the static color frame buffer.
         _staticColorLedCount = SettingsService.CurrentSettings.LedCount;
         _staticColorFrame = new byte[_staticColorLedCount * 3];
@@ -194,11 +215,29 @@ public partial class MainViewModel : ObservableObject {
     private DateTime _lastConnectionToast = DateTime.MinValue;
     private bool _lastConnectionState;
 
+    private async Task OnUsbDisconnectedAsync() {
+        // Stop all active services and notify HyperHDR immediately.
+        _udpListener.Stop();
+        _pendingHyperHdrEnable = false;
+        if (IsHyperHdrServerReachable)
+            await _hyperHdrService.SetSyncStateAsync(false);
+
+        // Mark system as disabled so UI reflects the no-strip state.
+        if (IsServicesEnabled) {
+            IsServicesEnabled = false;
+            _usbController.IsHardwareOverridden = true;
+            ServicesStatusString = "No Controller";
+            ServicesStatusColor  = "#E51400";
+        }
+
+        _notifications.Show("HdrBridge", "Controller disconnected — sync stopped");
+        OnPropertyChanged(nameof(CurrentModeString));
+    }
+
     private void OnUsbConnectionChanged(bool connected) {
         IsUsbConnected = connected;
 
         // Debounce: USB devices often fire multiple connection events during enumeration.
-        // Only suppress if the state hasn't changed AND it fired again within 2 s.
         var now = DateTime.UtcNow;
         bool stateChanged = connected != _lastConnectionState;
         if (!stateChanged && (now - _lastConnectionToast).TotalSeconds < 2)
@@ -208,11 +247,15 @@ public partial class MainViewModel : ObservableObject {
         _lastConnectionToast = now;
 
         if (connected) {
+            // Re-enable services automatically when controller comes back.
+            IsServicesEnabled = true;
+            _usbController.IsHardwareOverridden = false;
+            ServicesStatusString = "System Active";
+            ServicesStatusColor  = "#60A917";
             _notifications.Show("HdrBridge", "Controller connected");
             _ = ApplyCurrentModeAsync();
         } else {
-            _udpListener.Stop();
-            _notifications.Show("HdrBridge", "Controller disconnected");
+            _ = OnUsbDisconnectedAsync();
         }
     }
 
@@ -226,6 +269,16 @@ public partial class MainViewModel : ObservableObject {
         OnPropertyChanged(nameof(TrayToolTipText));
         OnPropertyChanged(nameof(TrayIconSource));
         OnPropertyChanged(nameof(IsManualMode));
+        OnPropertyChanged(nameof(ServicesButtonLabel));
+        OnPropertyChanged(nameof(CurrentModeString));
+        OnPropertyChanged(nameof(CurrentModeColor));
+    }
+
+    partial void OnIsUsbConnectedChanged(bool value) {
+        // Notify every property that changes meaning when hardware presence changes.
+        OnPropertyChanged(nameof(ServicesButtonLabel));
+        OnPropertyChanged(nameof(CurrentModeString));
+        OnPropertyChanged(nameof(CurrentModeColor));
     }
 
     public void SaveStartupPreference() {
@@ -248,17 +301,23 @@ public partial class MainViewModel : ObservableObject {
 
     [RelayCommand]
     public async Task ToggleServices() {
+        // Cannot enable sync without a connected controller.
+        if (!IsUsbConnected && !IsServicesEnabled) {
+            MessageBox.Show("Please connect the LED strip first.", "HdrBridge");
+            return;
+        }
+
         IsServicesEnabled = !IsServicesEnabled;
         _usbController.IsHardwareOverridden = !IsServicesEnabled;
         ServicesStatusString = IsServicesEnabled ? "System Active" : "System Offline";
-        ServicesStatusColor = IsServicesEnabled ? "#60A917" : "#E51400";
-        
+        ServicesStatusColor  = IsServicesEnabled ? "#60A917"      : "#E51400";
+
         if (!IsServicesEnabled) {
             await _usbController.SendPowerCommandAsync(false);
         } else {
             await _usbController.SendPowerCommandAsync(true, StaticColorR, StaticColorG, StaticColorB);
         }
-        
+
         await ApplyCurrentModeAsync();
     }
 
@@ -340,6 +399,16 @@ public partial class MainViewModel : ObservableObject {
     
 
     public async Task ApplyCurrentModeAsync() {
+        // No hardware present — ensure everything is off and bail out.
+        if (!IsUsbConnected) {
+            _udpListener.Stop();
+            _pendingHyperHdrEnable = false;
+            if (IsHyperHdrServerReachable)
+                await _hyperHdrService.SetSyncStateAsync(false);
+            OnPropertyChanged(nameof(CurrentModeString));
+            return;
+        }
+
         if (!IsServicesEnabled) {
             _udpListener.Stop();
             _pendingHyperHdrEnable = false;

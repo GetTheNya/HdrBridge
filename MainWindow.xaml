@@ -151,7 +151,7 @@
                 
                 <Button Grid.Column="1" Command="{Binding ToggleServicesCommand}" Foreground="White" BorderThickness="0" Padding="12,8" Cursor="Hand" VerticalAlignment="Center">
                     <Button.Content>
-                        <TextBlock Text="{Binding ServicesStatusString}" FontSize="14" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ServicesButtonLabel}" FontSize="14" FontWeight="SemiBold"/>
                     </Button.Content>
                     <Button.Style>
                         <Style TargetType="Button">
@@ -174,8 +174,13 @@
                                 </Setter.Value>
                             </Setter>
                             <Style.Triggers>
+                                <!-- Paused by user -->
                                 <DataTrigger Binding="{Binding IsServicesEnabled}" Value="False">
                                     <Setter Property="Background" Value="#E51400"/>
+                                </DataTrigger>
+                                <!-- No controller connected — shown on top, highest priority -->
+                                <DataTrigger Binding="{Binding IsUsbConnected}" Value="False">
+                                    <Setter Property="Background" Value="#CA5010"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>

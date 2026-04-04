@@ -66,6 +66,7 @@ public partial class App : Application {
 
         _usbDeviceWatcher?.Dispose();
         MainViewModel?.Cleanup();
+        UsbController?.SendPowerCommandAsync(false);
         UsbController?.Dispose();
         base.OnExit(e);
     }
