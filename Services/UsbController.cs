@@ -20,14 +20,9 @@ public class UsbController : IDisposable {
     private volatile bool _isConnectedFlag;
 
     // ── Frame channel ───────────────────────────────────────────────────────────
-    // Channel capacity = 1: producer always overwrites stale frames (drop-oldest).
-    // ReadAsync truly suspends the sender thread when idle → 0 % spin CPU.
-    private readonly Channel<(byte[] Data, int Length)> _frameChannel =
-        Channel.CreateBounded<(byte[], int)>(new BoundedChannelOptions(1) {
-            FullMode    = BoundedChannelFullMode.DropOldest,
-            SingleReader = true,
-            SingleWriter = false,
-        });
+    // Capacity 1 + DropOldest: only the newest frame is kept; no backlog.
+    private readonly Channel<byte[]> _frameChannel =
+        Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
 
     // ── Pre-allocated send buffers ──────────────────────────────────────────────
     // Max packet: header(5) + ledCount*5 + 2. 2048 covers up to 408 LEDs.
@@ -35,11 +30,7 @@ public class UsbController : IDisposable {
     private readonly byte[] _usbReport = new byte[65]; // Report-ID + 64 payload bytes
     private readonly object _sendLock = new();
 
-    // ── HID write throttle ──────────────────────────────────────────────────────
-    // HID is a slow protocol; saturating it causes high kernel-mode CPU.
-    // We cap frame output to one write burst every ~12 ms (~83 fps max).
-    private const int MinFrameIntervalMs = 12;
-    private readonly Stopwatch _sendThrottle = Stopwatch.StartNew();
+    private byte[] _lastSentFrame = null;
 
     public event EventHandler<bool>?              ConnectionChanged;
     public event EventHandler<RemoteButtonAction>? RemoteButtonPressed;
@@ -132,24 +123,20 @@ public class UsbController : IDisposable {
     }
 
     // ── Sender loop ───────────────────────────────────────────────────────────────
-    // Truly async: suspends via ReadAsync when the channel is empty (zero CPU idle).
-    // Throttles output to MinFrameIntervalMs to avoid saturating the HID driver.
+    // Reads only when the channel yields a frame; Delay(33) caps ~30 FPS and yields the HID driver.
     private async Task SenderLoopAsync() {
         try {
-            var reader = _frameChannel.Reader;
-            while (!_cancellationTokenSource.Token.IsCancellationRequested) {
-                var frame = await reader.ReadAsync(_cancellationTokenSource.Token);
-
-                if (IsHardwareOverridden || !_isConnectedFlag) continue;
-
-                // Throttle: enforce minimum gap between HID write bursts.
-                long elapsed = _sendThrottle.ElapsedMilliseconds;
-                if (elapsed < MinFrameIntervalMs) {
-                    await Task.Delay((int)(MinFrameIntervalMs - elapsed), _cancellationTokenSource.Token);
+            await foreach (var frame in _frameChannel.Reader.ReadAllAsync(_cancellationTokenSource.Token)) {
+                if (_lastSentFrame != null && frame.SequenceEqual(_lastSentFrame)) {
+                    continue;
                 }
-
-                SendRawFrameInternal(frame.Data, frame.Length);
-                _sendThrottle.Restart();
+                
+                if (!IsHardwareOverridden && _isConnectedFlag) {
+                    SendRawFrameInternal(frame);
+                    _lastSentFrame = frame;
+                }
+                
+                await Task.Delay(33, _cancellationTokenSource.Token);
             }
         }
         catch (OperationCanceledException) { }
@@ -175,12 +162,11 @@ public class UsbController : IDisposable {
     /// <param name="rgbData">Buffer containing RGB data. May be a shared reusable buffer.</param>
     /// <param name="length">Number of valid bytes in <paramref name="rgbData"/> to use.</param>
     public void EnqueueRawFrame(byte[] rgbData, int length) {
-        // Uses _isConnectedFlag — never calls _device.IsConnected.
         if (!_isConnectedFlag || IsHardwareOverridden) return;
 
-        // TryWrite with DropOldest channel semantics: automatically replaces
-        // the pending stale frame without blocking.
-        _frameChannel.Writer.TryWrite((rgbData, length));
+        var copy = new byte[length];
+        Array.Copy(rgbData, copy, length);
+        _frameChannel.Writer.TryWrite(copy);
     }
 
     public void SendHardwareEffect(byte[] payload) {
@@ -195,9 +181,10 @@ public class UsbController : IDisposable {
     }
 
     public void SendBlackFrame() {
+        if (!_isConnectedFlag || IsHardwareOverridden) return;
+
         int len = _ledCount * 3;
-        byte[] black = new byte[len];
-        SendRawFrameInternal(black, len);
+        _frameChannel.Writer.TryWrite(new byte[len]);
     }
 
     public async Task SendPowerCommandAsync(bool turnOn, byte r = 255, byte g = 255, byte b = 255) {
@@ -266,8 +253,10 @@ public class UsbController : IDisposable {
         Debug.WriteLine("Initialization success!");
     }
 
-    private void SendRawFrameInternal(byte[] colorsArray, int colorsLength) {
+    private void SendRawFrameInternal(byte[] colorsArray) {
         if (_device == null) return;
+
+        int colorsLength = colorsArray.Length;
 
         lock (_sendLock) {
             try {
