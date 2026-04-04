@@ -64,10 +64,12 @@ public partial class MainViewModel : ObservableObject {
         }
     }
 
-    private readonly System.Timers.Timer _staticColorTimer;
-    private readonly DispatcherTimer _hyperHdrHeartbeatTimer;
     private bool _pendingHyperHdrEnable;
     private CancellationTokenSource? _brightnessDebounceCts;
+
+    // Pre-allocated static color frame buffer — rebuilt only when LED count changes.
+    private byte[] _staticColorFrame;
+    private int _staticColorLedCount;
 
     public ObservableCollection<HardwareEffect> AvailableEffects { get; }
 
@@ -159,15 +161,8 @@ public partial class MainViewModel : ObservableObject {
             }));
         };
 
-        _staticColorTimer = new System.Timers.Timer(150); // ~6.6 FPS
-        _staticColorTimer.Elapsed += (s, e) => {
-            if (CurrentMode == AppMode.StaticColor && IsServicesEnabled) {
-                SendStaticColorFrame();
-            }
-        };
-        _staticColorTimer.Start();
 
-        _hyperHdrHeartbeatTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        var _hyperHdrHeartbeatTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _hyperHdrHeartbeatTimer.Tick += async (_, _) => await OnHyperHdrHeartbeatAsync();
         _hyperHdrHeartbeatTimer.Start();
         _ = OnHyperHdrHeartbeatAsync();
@@ -179,6 +174,11 @@ public partial class MainViewModel : ObservableObject {
         StaticColorG = SettingsService.CurrentSettings.StaticColorG;
         StaticColorB = SettingsService.CurrentSettings.StaticColorB;
         HardwareEffectSpeed = SettingsService.CurrentSettings.HardwareEffectSpeed;
+
+        // Initialize the static color frame buffer.
+        _staticColorLedCount = SettingsService.CurrentSettings.LedCount;
+        _staticColorFrame = new byte[_staticColorLedCount * 3];
+        RebuildStaticColorFrame();
 
         _systemPowerService.SystemSuspendChanged += (_, suspended) => {
             System.Windows.Application.Current?.Dispatcher?.Invoke(() => {
@@ -197,10 +197,13 @@ public partial class MainViewModel : ObservableObject {
     private void OnUsbConnectionChanged(bool connected) {
         IsUsbConnected = connected;
 
-        // Debounce: USB devices often fire multiple connection events during enumeration
+        // Debounce: USB devices often fire multiple connection events during enumeration.
+        // Only suppress if the state hasn't changed AND it fired again within 2 s.
         var now = DateTime.UtcNow;
-        if (connected == _lastConnectionState && (now - _lastConnectionToast).TotalSeconds < 2)
+        bool stateChanged = connected != _lastConnectionState;
+        if (!stateChanged && (now - _lastConnectionToast).TotalSeconds < 2)
             return;
+
         _lastConnectionState = connected;
         _lastConnectionToast = now;
 
@@ -293,17 +296,30 @@ public partial class MainViewModel : ObservableObject {
         SettingsService.CurrentSettings.StaticColorG = StaticColorG;
         SettingsService.CurrentSettings.StaticColorB = StaticColorB;
         SettingsService.SaveSettings();
+        RebuildStaticColorFrame();
+        // Push update immediately — no polling timer, so we must send here.
+        if (CurrentMode == AppMode.StaticColor && IsServicesEnabled)
+            SendStaticColorFrame();
+    }
+
+    /// <summary>Fills the shared static color buffer with the current RGB values. Call whenever R/G/B changes.</summary>
+    private void RebuildStaticColorFrame() {
+        int count = SettingsService.CurrentSettings.LedCount;
+        // Reallocate only if LED count changed (rare).
+        if (_staticColorLedCount != count || _staticColorFrame.Length != count * 3) {
+            _staticColorLedCount = count;
+            _staticColorFrame = new byte[count * 3];
+        }
+        for (int i = 0; i < count; i++) {
+            _staticColorFrame[i * 3]     = StaticColorR;
+            _staticColorFrame[i * 3 + 1] = StaticColorG;
+            _staticColorFrame[i * 3 + 2] = StaticColorB;
+        }
     }
 
     private void SendStaticColorFrame() {
-        int count = SettingsService.CurrentSettings.LedCount;
-        byte[] frame = new byte[count * 3];
-        for(int i=0; i < count; i++) {
-            frame[i*3] = StaticColorR;
-            frame[(i*3)+1] = StaticColorG;
-            frame[(i*3)+2] = StaticColorB;
-        }
-        _usbController.EnqueueRawFrame(frame);
+        // Use the pre-built shared buffer; no allocation on the hot path.
+        _usbController.EnqueueRawFrame(_staticColorFrame, _staticColorFrame.Length);
     }
     
     [RelayCommand]
@@ -390,6 +406,7 @@ public partial class MainViewModel : ObservableObject {
     public void SaveSettings() {
         SettingsService.SaveSettings();
         _usbController.UpdateLedCount(SettingsService.CurrentSettings.LedCount);
+        RebuildStaticColorFrame(); // LED count may have changed
 
         _udpListener.Stop();
         _ = ApplyCurrentModeAsync();
