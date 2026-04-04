@@ -30,7 +30,7 @@ public class UsbController : IDisposable {
     private readonly byte[] _usbReport = new byte[65]; // Report-ID + 64 payload bytes
     private readonly object _sendLock = new();
 
-    private byte[] _lastSentFrame = null;
+    private byte[]? _lastSentFrame = null;
 
     public event EventHandler<bool>?              ConnectionChanged;
     public event EventHandler<RemoteButtonAction>? RemoteButtonPressed;
