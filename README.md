@@ -53,8 +53,6 @@ In the HyperHDR web interface, set the LED Hardware as follows:
 * **Port:** `19446`
 * **Important:** Adjust the *Input Position* or *Reverse Direction* in the LED Layout settings to match your physical LED strip start.
 
-> **Pro Tip:** For the best visual experience, go to HyperHDR's *Image Processing* tab, enable **Smoothing (Linear)**, and set the update frequency to ~50Hz.
-
 ---
 
 ## 🛠️ Node.js Alternative (Reference)
