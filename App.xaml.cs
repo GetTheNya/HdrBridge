@@ -44,7 +44,7 @@ public partial class App : Application {
         SystemPowerService = new SystemPowerService();
         MainViewModel = new MainViewModel(UsbController, UdpListener, SettingsService, EffectManager, HyperHdrService, NotificationService, SystemPowerService);
 
-        EcoModeHelper.EnableEfficiencyMode();
+        // EcoModeHelper.EnableEfficiencyMode();
 
         _usbDeviceWatcher = new UsbDeviceWatcherService(0x1A86, 0xFE07,
             onInserted: () => Current.Dispatcher.Invoke(() => UsbController.TryConnect()),

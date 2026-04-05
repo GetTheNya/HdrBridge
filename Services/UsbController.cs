@@ -1,13 +1,16 @@
 using System.Diagnostics;
 using System.Threading.Channels;
-using HidLibrary;
+using HidApi;
 
 namespace HdrBridge.Services;
 
 public class UsbController : IDisposable {
-    private const int VendorId = 0x1A86;
-    private const int ProductId = 0xFE07;
-    private HidDevice? _device;
+    private const ushort VendorId = 0x1A86;
+    private const ushort ProductId = 0xFE07;
+    private Device? _device;
+    /// <summary>OS path of the open device; used with <see cref="Hid.Enumerate"/> to detect unplug without polling <c>IsConnected</c>.</summary>
+    private string? _devicePath;
+    private readonly byte[] _readBuffer = new byte[65];
     private int _ledCount;
     private byte _currentSeq = 0x01;
 
@@ -15,8 +18,7 @@ public class UsbController : IDisposable {
 
     // ── Connection state ────────────────────────────────────────────────────────
     // Cached flag updated ONLY by MonitorLoopAsync every 2 s.
-    // All hot-path code reads this bool instead of calling _device.IsConnected,
-    // which was measured at 21 % CPU due to kernel transitions.
+    // All hot-path code reads this bool instead of HIDAPI enumerate on the hot path.
     private volatile bool _isConnectedFlag;
 
     // ── Frame channel ───────────────────────────────────────────────────────────
@@ -29,8 +31,11 @@ public class UsbController : IDisposable {
     private byte[] _pktBuffer = new byte[2048];
     private readonly byte[] _usbReport = new byte[65]; // Report-ID + 64 payload bytes
     private readonly object _sendLock = new();
+    private readonly AutoResetEvent _frameReadyEvent = new(false);
 
     private byte[]? _lastSentFrame = null;
+    /// <summary>Latest frame to send; only written from <see cref="SenderLoopAsync"/>, read from <see cref="UsbSenderThread"/> after <see cref="_frameReadyEvent"/>.</summary>
+    private volatile byte[]? _latestFrame; 
 
     public event EventHandler<bool>?              ConnectionChanged;
     public event EventHandler<RemoteButtonAction>? RemoteButtonPressed;
@@ -42,9 +47,22 @@ public class UsbController : IDisposable {
     public UsbController(int ledCount) {
         _ledCount = ledCount;
 
+        try {
+            Hid.Init();
+        }
+        catch (HidException ex) {
+            Debug.WriteLine($"Hid.Init: {ex.Message}");
+        }
+
         _ = Task.Run(SenderLoopAsync);
         _ = Task.Run(MonitorLoopAsync);
         _ = Task.Run(ReadLoopAsync);
+
+        var usbThread = new Thread(UsbSenderThread) {
+            IsBackground = true,
+            Priority = ThreadPriority.AboveNormal
+        };
+        usbThread.Start();
 
         TryConnect();
     }
@@ -58,19 +76,29 @@ public class UsbController : IDisposable {
     private async Task MonitorLoopAsync() {
         try {
             while (!_cancellationTokenSource.Token.IsCancellationRequested) {
-                bool physicallyConnected = _device != null && _device.IsConnected;
+                bool deviceLost = false;
+                if (_device != null && _devicePath != null && _isConnectedFlag) {
+                    try {
+                        deviceLost = !Hid.Enumerate(VendorId, ProductId).Any(d =>
+                            d.Path.Equals(_devicePath, StringComparison.OrdinalIgnoreCase));
+                    }
+                    catch (Exception ex) {
+                        // Do not tear down on a transient enumerate failure (would stop auto-reconnect forever).
+                        Debug.WriteLine($"Monitor Hid.Enumerate: {ex.Message}");
+                    }
+                }
 
-                if (!physicallyConnected && _isConnectedFlag) {
-                    // Device just disconnected.
+                if (deviceLost && _isConnectedFlag) {
                     _isConnectedFlag = false;
                     Debug.WriteLine("Device disconnected.");
                     ConnectionChanged?.Invoke(this, false);
                     _device?.Dispose();
                     _device = null;
+                    _devicePath = null;
                 }
 
                 if (_device == null) {
-                    TryConnect(); // sets _isConnectedFlag = true on success
+                    TryConnect();
                 }
 
                 await Task.Delay(2000, _cancellationTokenSource.Token);
@@ -90,30 +118,29 @@ public class UsbController : IDisposable {
                     continue;
                 }
 
-                // Synchronous read with 500 ms timeout — blocks this background thread only.
-                var report = _device.ReadReport(500);
-                if (report.ReadStatus == HidDeviceData.ReadStatus.Success) {
-                    byte[] data = report.Data;
-                    int offset = (data.Length == 65) ? 1 : 0;
+                int n = _device.ReadTimeout(_readBuffer, 500);
+                if (n <= 0)
+                    continue;
 
-                    // Check packet signature: 52 42 08 00 F1 00
-                    if (data.Length >= offset + 25 &&
-                        data[offset + 0] == 0x52 &&
-                        data[offset + 1] == 0x42 &&
-                        data[offset + 2] == 0x08 &&
-                        data[offset + 3] == 0x00 &&
-                        data[offset + 4] == 0xF1 &&
-                        data[offset + 5] == 0x00) {
+                int offset = (n == 65) ? 1 : 0;
 
-                        if (data[offset + 16] == 0x04) {
-                            RemoteButtonPressed?.Invoke(this, RemoteButtonAction.PowerToggle);
-                        } else if (data[offset + 16] == 0x41 && data[offset + 24] == 0x32) {
-                            RemoteButtonPressed?.Invoke(this, RemoteButtonAction.StaticColorForce);
-                        } else if (data[offset + 16] == 0x41 && data[offset + 24] == 0x5A) {
-                            RemoteButtonPressed?.Invoke(this, RemoteButtonAction.DynamicEffectForce);
-                        } else {
-                            RemoteButtonPressed?.Invoke(this, RemoteButtonAction.UnknownOverrideForce);
-                        }
+                // Check packet signature: 52 42 08 00 F1 00
+                if (n >= offset + 25 &&
+                    _readBuffer[offset + 0] == 0x52 &&
+                    _readBuffer[offset + 1] == 0x42 &&
+                    _readBuffer[offset + 2] == 0x08 &&
+                    _readBuffer[offset + 3] == 0x00 &&
+                    _readBuffer[offset + 4] == 0xF1 &&
+                    _readBuffer[offset + 5] == 0x00) {
+
+                    if (_readBuffer[offset + 16] == 0x04) {
+                        RemoteButtonPressed?.Invoke(this, RemoteButtonAction.PowerToggle);
+                    } else if (_readBuffer[offset + 16] == 0x41 && _readBuffer[offset + 24] == 0x32) {
+                        RemoteButtonPressed?.Invoke(this, RemoteButtonAction.StaticColorForce);
+                    } else if (_readBuffer[offset + 16] == 0x41 && _readBuffer[offset + 24] == 0x5A) {
+                        RemoteButtonPressed?.Invoke(this, RemoteButtonAction.DynamicEffectForce);
+                    } else {
+                        RemoteButtonPressed?.Invoke(this, RemoteButtonAction.UnknownOverrideForce);
                     }
                 }
             }
@@ -123,40 +150,73 @@ public class UsbController : IDisposable {
     }
 
     // ── Sender loop ───────────────────────────────────────────────────────────────
-    // Reads only when the channel yields a frame; Delay(33) caps ~30 FPS and yields the HID driver.
     private async Task SenderLoopAsync() {
-        try {
-            await foreach (var frame in _frameChannel.Reader.ReadAllAsync(_cancellationTokenSource.Token)) {
-                if (_lastSentFrame != null && frame.SequenceEqual(_lastSentFrame)) {
-                    continue;
-                }
-                
-                if (!IsHardwareOverridden && _isConnectedFlag) {
-                    SendRawFrameInternal(frame);
-                    _lastSentFrame = frame;
-                }
-                
-                await Task.Delay(33, _cancellationTokenSource.Token);
-            }
+        while (await _frameChannel.Reader.WaitToReadAsync(_cancellationTokenSource.Token)) {
+            byte[]? frame = null;
+            while (_frameChannel.Reader.TryRead(out var f))
+                frame = f;
+
+            if (frame == null || !_isConnectedFlag || IsHardwareOverridden)
+                continue;
+
+            if (_lastSentFrame != null && frame.SequenceEqual(_lastSentFrame))
+                continue;
+
+            _latestFrame = frame;
+            _lastSentFrame = frame;
+            _frameReadyEvent.Set();
         }
-        catch (OperationCanceledException) { }
     }
 
     // ── Public API ────────────────────────────────────────────────────────────────
 
     public void TryConnect() {
         try {
-            var device = HidDevices.Enumerate(VendorId, ProductId)
-                .FirstOrDefault(d => d.DevicePath.Contains("mi_00", StringComparison.OrdinalIgnoreCase));
-
-            if (device != null && device.IsConnected) {
-                _device = device;
-                InitializeDevice();
-                _isConnectedFlag = true;
-                ConnectionChanged?.Invoke(this, true);
+            List<DeviceInfo> list;
+            try {
+                list = Hid.Enumerate(VendorId, ProductId).ToList();
             }
+            catch (Exception ex) {
+                Debug.WriteLine($"TryConnect Hid.Enumerate: {ex.Message}");
+                return;
+            }
+
+            var info = SelectDeviceInfo(list);
+            if (info == null) {
+                Debug.WriteLine("TryConnect: no device for VID/PID (enumeration empty).");
+                return;
+            }
+
+            _device?.Dispose();
+            _device = info.ConnectToDevice();
+            _devicePath = info.Path;
+            InitializeDevice();
+            _isConnectedFlag = true;
+            ConnectionChanged?.Invoke(this, true);
         }
-        catch (Exception) { }
+        catch (Exception ex) {
+            Debug.WriteLine($"TryConnect: {ex.Message}");
+            _device?.Dispose();
+            _device = null;
+            _devicePath = null;
+        }
+    }
+
+    /// <summary>
+    /// Prefer the same interface as the old HidLibrary filter (composite device, first HID interface).
+    /// HIDAPI path strings vary by OS/build; if <c>mi_00</c> is missing, use interface number or first match.
+    /// </summary>
+    private static DeviceInfo? SelectDeviceInfo(IReadOnlyList<DeviceInfo> devices) {
+        if (devices.Count == 0) return null;
+
+        var byPath = devices.FirstOrDefault(d => d.Path.Contains("mi_00", StringComparison.OrdinalIgnoreCase));
+        if (byPath != null) return byPath;
+
+        var iface0 = devices.FirstOrDefault(d => d.InterfaceNumber == 0);
+        if (iface0 != null) return iface0;
+
+        Debug.WriteLine($"SelectDeviceInfo: using first of {devices.Count} HID paths (no mi_00 / iface 0).");
+        return devices[0];
     }
 
     /// <param name="rgbData">Buffer containing RGB data. May be a shared reusable buffer.</param>
@@ -172,11 +232,13 @@ public class UsbController : IDisposable {
     public void SendHardwareEffect(byte[] payload) {
         if (!_isConnectedFlag || _device == null) return;
 
-        byte[] report = new byte[65];
-        report[0] = 0x00;
-        Array.Copy(payload, 0, report, 1, Math.Min(payload.Length, 64));
-
-        _device.Write(report);
+        lock (_sendLock) {
+            if (_device == null) return;
+            byte[] report = new byte[65];
+            report[0] = 0x00;
+            Array.Copy(payload, 0, report, 1, Math.Min(payload.Length, 64));
+            _device.Write(report);
+        }
         Debug.WriteLine("Sent hardware effect");
     }
 
@@ -204,10 +266,13 @@ public class UsbController : IDisposable {
         pkt1[5] = (byte)(crc1 & 0xFF);
         _currentSeq = (byte)(_currentSeq == 255 ? 1 : _currentSeq + 1);
 
-        byte[] report1 = new byte[65];
-        report1[0] = 0x00;
-        Array.Copy(pkt1, 0, report1, 1, 64);
-        _device.Write(report1);
+        lock (_sendLock) {
+            if (_device == null) return;
+            byte[] report1 = new byte[65];
+            report1[0] = 0x00;
+            Array.Copy(pkt1, 0, report1, 1, 64);
+            _device.Write(report1);
+        }
 
         await Task.Delay(50);
 
@@ -224,10 +289,13 @@ public class UsbController : IDisposable {
         pkt2[15] = (byte)(crc2 & 0xFF);
         _currentSeq = (byte)(_currentSeq == 255 ? 1 : _currentSeq + 1);
 
-        byte[] report2 = new byte[65];
-        report2[0] = 0x00;
-        Array.Copy(pkt2, 0, report2, 1, 64);
-        _device.Write(report2);
+        lock (_sendLock) {
+            if (_device == null) return;
+            byte[] report2 = new byte[65];
+            report2[0] = 0x00;
+            Array.Copy(pkt2, 0, report2, 1, 64);
+            _device.Write(report2);
+        }
 
         Debug.WriteLine($"Sent power command: {(turnOn ? "ON" : "OFF")}");
     }
@@ -247,10 +315,36 @@ public class UsbController : IDisposable {
         init2[0] = 0x00;
         Array.Copy(init2Data, 0, init2, 1, init2Data.Length);
 
-        _device.Write(init1);
-        Thread.Sleep(50);
-        _device.Write(init2);
+        lock (_sendLock) {
+            if (_device == null) return;
+            _device.Write(init1);
+            Thread.Sleep(50);
+            _device.Write(init2);
+        }
         Debug.WriteLine("Initialization success!");
+    }
+
+    /// <summary>
+    /// Dedicated thread: blocks on <see cref="_frameReadyEvent"/> (no busy-wait) until a frame is ready or shutdown.
+    /// </summary>
+    private void UsbSenderThread() {
+        var token = _cancellationTokenSource.Token;
+        var handles = new WaitHandle[] { _frameReadyEvent, token.WaitHandle };
+
+        while (true) {
+            // 0 = frame signal, 1 = dispose / cancellation — avoids blocking forever after Dispose
+            int signaled = WaitHandle.WaitAny(handles);
+            if (signaled == 1 || token.IsCancellationRequested)
+                return;
+
+            var frameToSend = _latestFrame;
+            if (frameToSend == null || !_isConnectedFlag || IsHardwareOverridden)
+                continue;
+
+            SendRawFrameInternal(frameToSend);
+
+            Thread.Sleep(16);
+        }
     }
 
     private void SendRawFrameInternal(byte[] colorsArray) {
@@ -315,8 +409,17 @@ public class UsbController : IDisposable {
 
     public void Dispose() {
         _cancellationTokenSource.Cancel();
+        _frameReadyEvent.Set(); // unblock UsbSenderThread if waiting
         _frameChannel.Writer.TryComplete();
         _device?.Dispose();
+        _device = null;
+        _devicePath = null;
+        try {
+            Hid.Exit();
+        }
+        catch (HidException ex) {
+            Debug.WriteLine($"Hid.Exit: {ex.Message}");
+        }
     }
 }
 
