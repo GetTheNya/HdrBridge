@@ -19,6 +19,18 @@ public partial class App : Application {
     private MainWindow? _mainWindow;
     private UsbDeviceWatcherService? _usbDeviceWatcher;
 
+    static App() {
+        AppDomain.CurrentDomain.AssemblyResolve += (sender, args) => {
+            string assemblyName = new System.Reflection.AssemblyName(args.Name).Name + ".dll";
+            string assemblyPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "libs", assemblyName);
+
+            if (System.IO.File.Exists(assemblyPath)) {
+                return System.Reflection.Assembly.LoadFrom(assemblyPath);
+            }
+            return null;
+        };
+    }
+
     protected override void OnStartup(StartupEventArgs e) {
         base.OnStartup(e);
 

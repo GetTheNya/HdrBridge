@@ -29,4 +29,27 @@
     <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
 
+<Target Name="MoveDllsToLibs" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <ItemGroup>
+      <DllFiles Include="$(TargetDir)*.dll" Exclude="$(TargetDir)$(TargetName).dll" />
+    </ItemGroup>
+    
+    <MakeDir Directories="$(TargetDir)libs" Condition="!Exists('$(TargetDir)libs')" />
+    <Move SourceFiles="@(DllFiles)" DestinationFolder="$(TargetDir)libs" OverwriteReadOnlyFiles="true" />
+  </Target>
+
+  <Target Name="MoveDllsOnPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <PublishDllFiles Include="$(PublishDir)*.dll" Exclude="$(PublishDir)$(TargetName).dll" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(PublishDir)libs" Condition="!Exists('$(PublishDir)libs')" />
+    <Move SourceFiles="@(PublishDllFiles)" DestinationFolder="$(PublishDir)libs" />
+    
+    <ItemGroup>
+      <LanguageFolders Include="$(PublishDir)cs;$(PublishDir)de;$(PublishDir)es;$(PublishDir)fr;$(PublishDir)it;$(PublishDir)ja;$(PublishDir)ko;$(PublishDir)pl;$(PublishDir)pt-BR;$(PublishDir)ru;$(PublishDir)tr;$(PublishDir)zh-Hans;$(PublishDir)zh-Hant" />
+    </ItemGroup>
+    <RemoveDir Directories="@(LanguageFolders)" />
+  </Target>
+
 </Project>
