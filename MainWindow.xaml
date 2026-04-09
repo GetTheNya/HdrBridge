@@ -105,11 +105,21 @@
         <tb:TaskbarIcon x:Name="TrayIcon"
                         IconSource="{Binding TrayIconSource}"
                         ToolTipText="{Binding TrayToolTipText}"
+                        TrayLeftMouseUp="TrayIcon_TrayLeftMouseUp"
                         TrayMouseDoubleClick="TrayIcon_TrayMouseDoubleClick">
             <tb:TaskbarIcon.ContextMenu>
                 <ContextMenu Opened="TrayContextMenu_Opened">
                     <MenuItem x:Name="SyncToggleMenuItem" Header="Disable Sync" Click="SyncToggleMenuItem_Click" />
                     <MenuItem Header="Open Settings" Click="MenuItem_Open_Click" />
+                    <MenuItem Header="Brightness">
+                        <MenuItem Header="100%" Click="Brightness_Click" Tag="0" IsCheckable="False"/>
+                        <MenuItem Header="75%" Click="Brightness_Click" Tag="1" IsCheckable="False"/>
+                        <MenuItem Header="50%" Click="Brightness_Click" Tag="2" IsCheckable="False"/>
+                        <MenuItem Header="25%" Click="Brightness_Click" Tag="3" IsCheckable="False"/>
+                        <Separator/>
+                        <MenuItem Header="+10%" Click="Brightness_Change" Tag="0" StaysOpenOnClick="True"/>
+                        <MenuItem Header="-10%" Click="Brightness_Change" Tag="1" StaysOpenOnClick="True"/>
+                    </MenuItem>
                     <Separator/>
                     <MenuItem Header="Exit" Click="MenuItem_Exit_Click" />
                 </ContextMenu>
