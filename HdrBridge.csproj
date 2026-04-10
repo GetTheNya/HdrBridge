@@ -11,6 +11,7 @@
     <Product>HdrBridge</Product>
     <Title>HdrBridge</Title>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <StartupObject>HdrBridge.Program</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,11 +28,12 @@
     <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="Velopack" Version="0.0.1298" />
   </ItemGroup>
 
 <Target Name="MoveDllsToLibs" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <ItemGroup>
-      <DllFiles Include="$(TargetDir)*.dll" Exclude="$(TargetDir)$(TargetName).dll" />
+      <DllFiles Include="$(TargetDir)*.dll" Exclude="$(TargetDir)$(TargetName).dll;$(TargetDir)Velopack.dll;$(TargetDir)NuGet.Versioning.dll" />
     </ItemGroup>
     
     <MakeDir Directories="$(TargetDir)libs" Condition="!Exists('$(TargetDir)libs')" />
@@ -40,7 +42,7 @@
 
   <Target Name="MoveDllsOnPublish" AfterTargets="Publish">
     <ItemGroup>
-      <PublishDllFiles Include="$(PublishDir)*.dll" Exclude="$(PublishDir)$(TargetName).dll" />
+      <PublishDllFiles Include="$(PublishDir)*.dll" Exclude="$(PublishDir)$(TargetName).dll;$(TargetDir)Velopack.dll;$(TargetDir)NuGet.Versioning.dll" />
     </ItemGroup>
 
     <MakeDir Directories="$(PublishDir)libs" Condition="!Exists('$(PublishDir)libs')" />

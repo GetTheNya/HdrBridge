@@ -15,6 +15,7 @@ public partial class App : Application {
     public static MainViewModel MainViewModel { get; private set; } = null!;
     public static NotificationService NotificationService { get; private set; } = null!;
     public static SystemPowerService SystemPowerService { get; private set; } = null!;
+    public static UpdateService UpdateService { get; private set; } = null!;
 
     private MainWindow? _mainWindow;
     private UsbDeviceWatcherService? _usbDeviceWatcher;
@@ -37,12 +38,21 @@ public partial class App : Application {
         NotificationService = new NotificationService();
 
         SettingsService = new SettingsService();
+        UpdateService = new UpdateService(SettingsService, NotificationService);
         UsbController = new UsbController(SettingsService.CurrentSettings.LedCount);
         EffectManager = new EffectManager(UsbController);
         UdpListener = new UdpListener(UsbController, SettingsService);
         HyperHdrService = new HyperHdrService(SettingsService);
         SystemPowerService = new SystemPowerService();
-        MainViewModel = new MainViewModel(UsbController, UdpListener, SettingsService, EffectManager, HyperHdrService, NotificationService, SystemPowerService);
+        MainViewModel = new MainViewModel(
+            UsbController,
+            UdpListener,
+            SettingsService,
+            EffectManager,
+            HyperHdrService,
+            NotificationService,
+            SystemPowerService,
+            UpdateService);
 
         // EcoModeHelper.EnableEfficiencyMode();
 
@@ -52,6 +62,9 @@ public partial class App : Application {
 
         UdpListener.Start();
         _ = MainViewModel.ApplyCurrentModeAsync();
+        UpdateService.Start();
+        _ = UpdateService.CheckForUpdatesAsync(silent: true, downloadIfAvailable: true);
+        _ = ShowWhatsNewIfNeededAsync();
 
         _mainWindow = new MainWindow {
             DataContext = MainViewModel
@@ -80,8 +93,24 @@ public partial class App : Application {
 
         _usbDeviceWatcher?.Dispose();
         MainViewModel?.Cleanup();
+        UpdateService?.Dispose();
         UsbController?.SendPowerCommandAsync(false);
         UsbController?.Dispose();
         base.OnExit(e);
+    }
+
+    private async Task ShowWhatsNewIfNeededAsync() {
+        if (!UpdateService.ShouldShowWhatsNew(out var currentVersion)) {
+            return;
+        }
+
+        var releaseNotes = await UpdateService.GetReleaseNotesForCurrentVersionAsync();
+        MessageBox.Show(
+            $"What's New in {currentVersion}\n\n{releaseNotes}",
+            "HdrBridge Updated",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+
+        UpdateService.MarkWhatsNewAsSeen(currentVersion);
     }
 }

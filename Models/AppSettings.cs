@@ -13,4 +13,5 @@ public class AppSettings {
     public byte HardwareEffectSpeed { get; set; } = 127;
     public byte SelectedEffectId { get; set; } = 0;
     public bool AutoOffOnLockSleep { get; set; } = true;
+    public string LastSeenWhatsNewVersion { get; set; } = string.Empty;
 }

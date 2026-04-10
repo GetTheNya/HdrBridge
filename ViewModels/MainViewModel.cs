@@ -19,6 +19,7 @@ public partial class MainViewModel : ObservableObject {
     private readonly EffectManager _effectManager;
     private readonly HyperHdrService _hyperHdrService;
     private readonly SystemPowerService _systemPowerService;
+    private readonly UpdateService _updateService;
     private readonly BitmapFrame _trayIconActive;
     private readonly BitmapFrame _trayIconPaused;
     private bool _isSuspendedBySystem;
@@ -37,6 +38,13 @@ public partial class MainViewModel : ObservableObject {
     [ObservableProperty] private string _lastSentEffectId = "None";
     [ObservableProperty] private bool _isHyperHdrServerReachable;
     [ObservableProperty] private int _hyperHdrMaxBrightness = 100;
+    [ObservableProperty] private bool _isCheckingUpdates;
+    [ObservableProperty] private bool _isUpdateAvailable;
+    [ObservableProperty] private bool _isUpdateReadyToInstall;
+    [ObservableProperty] private int _updateDownloadProgressPercent;
+    [ObservableProperty] private string _updateStatusText = "Ready";
+    [ObservableProperty] private string _latestUpdateVersion = string.Empty;
+    [ObservableProperty] private string _updateReleaseNotesMarkdown = "No update checked yet.";
 
     public string SyncToggleMenuHeader => IsServicesEnabled ? "Disable Sync" : "Enable Sync";
     public string AppVersion {
@@ -61,6 +69,9 @@ public partial class MainViewModel : ObservableObject {
     public BitmapFrame TrayIconSource => IsServicesEnabled ? _trayIconActive : _trayIconPaused;
 
     public string SliderLabel => SelectedHardwareEffect?.Category == EffectCategory.Rhythm ? "Microphone Sensitivity" : "Effect Speed / Intensity";
+    public bool IsUpdateAttentionRequired => IsUpdateAvailable || IsUpdateReadyToInstall || IsCheckingUpdates;
+    public bool IsUpdateProgressVisible => IsCheckingUpdates || UpdateDownloadProgressPercent > 0;
+    public bool CanInstallUpdate => IsUpdateReadyToInstall;
 
     public System.Windows.Media.Color StaticColorMedia {
         get => System.Windows.Media.Color.FromRgb(StaticColorR, StaticColorG, StaticColorB);
@@ -128,7 +139,8 @@ public partial class MainViewModel : ObservableObject {
         EffectManager effectManager,
         HyperHdrService hyperHdrService,
         NotificationService notificationService,
-        SystemPowerService systemPowerService) {
+        SystemPowerService systemPowerService,
+        UpdateService updateService) {
         _usbController = usbController;
         _udpListener = udpListener;
         SettingsService = settingsService;
@@ -136,6 +148,7 @@ public partial class MainViewModel : ObservableObject {
         _hyperHdrService = hyperHdrService;
         _notifications = notificationService;
         _systemPowerService = systemPowerService;
+        _updateService = updateService;
 
         _trayIconActive = BitmapFrame.Create(new Uri("pack://application:,,,/Resources/app.ico"));
         _trayIconPaused = BitmapFrame.Create(new Uri("pack://application:,,,/Resources/tray_paused.ico"));
@@ -210,6 +223,27 @@ public partial class MainViewModel : ObservableObject {
             });
         };
         _systemPowerService.Start();
+
+        _updateService.StateChanged += (_, state) => {
+            Application.Current?.Dispatcher.Invoke(() => {
+                IsCheckingUpdates = state.IsChecking;
+                IsUpdateAvailable = state.IsUpdateAvailable || IsUpdateAvailable;
+                IsUpdateReadyToInstall = state.IsUpdateReady || _updateService.IsUpdateReadyToInstall;
+                UpdateDownloadProgressPercent = state.DownloadProgressPercent;
+                if (!string.IsNullOrWhiteSpace(state.LatestVersion)) {
+                    LatestUpdateVersion = state.LatestVersion;
+                }
+                if (!string.IsNullOrWhiteSpace(state.ReleaseNotesMarkdown)) {
+                    UpdateReleaseNotesMarkdown = state.ReleaseNotesMarkdown;
+                }
+                if (!string.IsNullOrWhiteSpace(state.StatusText)) {
+                    UpdateStatusText = state.StatusText;
+                }
+                OnPropertyChanged(nameof(IsUpdateAttentionRequired));
+                OnPropertyChanged(nameof(IsUpdateProgressVisible));
+                OnPropertyChanged(nameof(CanInstallUpdate));
+            });
+        };
     }
 
     private DateTime _lastConnectionToast = DateTime.MinValue;
@@ -479,6 +513,39 @@ public partial class MainViewModel : ObservableObject {
 
         _udpListener.Stop();
         _ = ApplyCurrentModeAsync();
+    }
+
+    [RelayCommand]
+    public async Task CheckForUpdates() {
+        var result = await _updateService.CheckForUpdatesAsync(silent: false, downloadIfAvailable: false);
+
+        if (result.HasUpdate && result.UpdateInfo is not null) {
+            IsUpdateAvailable = true;
+            LatestUpdateVersion = result.VersionTag ?? LatestUpdateVersion;
+            if (!string.IsNullOrWhiteSpace(result.ReleaseNotesMarkdown)) {
+                UpdateReleaseNotesMarkdown = result.ReleaseNotesMarkdown;
+            }
+            UpdateStatusText = $"Update found: {LatestUpdateVersion}";
+            OnPropertyChanged(nameof(IsUpdateAttentionRequired));
+            return;
+        }
+
+        UpdateStatusText = result.Message;
+    }
+
+    [RelayCommand]
+    public async Task DownloadUpdate() {
+        var result = await _updateService.CheckForUpdatesAsync(silent: false, downloadIfAvailable: true);
+        UpdateStatusText = result.Message;
+        if (result.IsReadyToInstall) {
+            IsUpdateReadyToInstall = true;
+            OnPropertyChanged(nameof(CanInstallUpdate));
+        }
+    }
+
+    [RelayCommand]
+    public void InstallUpdate() {
+        _updateService.InstallUpdateAndRestart();
     }
 
     // --- Stealth Mode: System suspend/resume ---
