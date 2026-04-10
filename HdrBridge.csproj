@@ -42,7 +42,7 @@
 
   <Target Name="MoveDllsOnPublish" AfterTargets="Publish">
     <ItemGroup>
-      <PublishDllFiles Include="$(PublishDir)*.dll" Exclude="$(PublishDir)$(TargetName).dll;$(TargetDir)Velopack.dll;$(TargetDir)NuGet.Versioning.dll" />
+      <PublishDllFiles Include="$(PublishDir)*.dll" Exclude="$(PublishDir)$(TargetName).dll;$(PublishDir)Velopack.dll;$(PublishDir)NuGet.Versioning.dll" />
     </ItemGroup>
 
     <MakeDir Directories="$(PublishDir)libs" Condition="!Exists('$(PublishDir)libs')" />
