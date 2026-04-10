@@ -46,6 +46,8 @@ public partial class MainViewModel : ObservableObject {
     [ObservableProperty] private string _latestUpdateVersion = string.Empty;
     [ObservableProperty] private string _updateReleaseNotesMarkdown = "No update checked yet.";
 
+    public bool IsUpdateSupported => _updateService.IsInstalled;
+
     public string SyncToggleMenuHeader => IsServicesEnabled ? "Disable Sync" : "Enable Sync";
     public string AppVersion {
         get {

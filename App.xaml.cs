@@ -105,11 +105,9 @@ public partial class App : Application {
         }
 
         var releaseNotes = await UpdateService.GetReleaseNotesForCurrentVersionAsync();
-        MessageBox.Show(
-            $"What's New in {currentVersion}\n\n{releaseNotes}",
-            "HdrBridge Updated",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        
+        var dialog = new Dialogs.WhatsNewDialog(currentVersion, releaseNotes);
+        dialog.ShowDialog();
 
         UpdateService.MarkWhatsNewAsSeen(currentVersion);
     }

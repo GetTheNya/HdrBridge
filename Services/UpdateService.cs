@@ -23,6 +23,8 @@ public sealed class UpdateService : IDisposable {
     public event EventHandler<UpdateStateChangedEventArgs>? StateChanged;
 
     public bool IsUpdateReadyToInstall => _downloadedUpdate is not null;
+    
+    public bool IsInstalled => _updateManager.IsInstalled;
 
     public UpdateService(SettingsService settingsService, NotificationService notifications) {
         _settingsService = settingsService;
@@ -42,10 +44,25 @@ public sealed class UpdateService : IDisposable {
     }
 
     public void Start() {
+        if (!IsInstalled) {
+            RaiseState(new UpdateStateChangedEventArgs {
+                StatusText = "Auto update is not available in portable version."
+            });
+            return;
+        }
         _silentCheckTimer.Start();
     }
 
     public async Task<UpdateResult> CheckForUpdatesAsync(bool silent, bool downloadIfAvailable) {
+        if (!IsInstalled) {
+            var msg = "Auto update is not available in portable version.";
+            RaiseState(new UpdateStateChangedEventArgs {
+                IsChecking = false,
+                StatusText = msg
+            });
+            return UpdateResult.Failed(msg);
+        }
+
         if (_isChecking || _isDownloading) {
             return UpdateResult.NoUpdate("Update check already running.");
         }
@@ -96,6 +113,10 @@ public sealed class UpdateService : IDisposable {
     }
 
     public async Task<UpdateResult> DownloadUpdateAsync(UpdateInfo update, bool silent) {
+        if (!IsInstalled) {
+            return UpdateResult.Failed("Auto update is not available in portable version.");
+        }
+
         if (_isDownloading) {
             return UpdateResult.NoUpdate("Update download already running.");
         }
