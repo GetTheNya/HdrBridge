@@ -77,7 +77,20 @@ public partial class App : Application {
             _mainWindow.Hide();
         };
 
-        if (!e.Args.Contains("-autostart")) {
+        if (e.Args.Contains("-autostart")) {
+            // H.NotifyIcon needs the full WPF visual-tree lifecycle (Loaded,
+            // OnApplyTemplate, etc.) to create its shell icon. We must Show()
+            // the window, but we make it invisible to avoid flicker.
+            _mainWindow.ShowInTaskbar = false;
+            _mainWindow.Opacity = 0;
+            _mainWindow.WindowState = WindowState.Minimized;
+            _mainWindow.Show();
+            // Restore normal state *before* hiding so WPF remembers it correctly.
+            _mainWindow.WindowState = WindowState.Normal;
+            _mainWindow.Hide();
+            _mainWindow.Opacity = 1;
+            _mainWindow.ShowInTaskbar = true;
+        } else {
             _mainWindow.Show();
         }
     }

@@ -7,15 +7,24 @@ using Xceed.Wpf.AvalonDock.Controls;
 namespace HdrBridge;
 
 public partial class MainWindow : Window {
+    // Delayed single-click timer so double-click doesn't also toggle sync.
+    private readonly DispatcherTimer _singleClickTimer;
+
     public MainWindow() {
         InitializeComponent();
-        Loaded += MainWindow_Loaded;
-    }
-
-    private void MainWindow_Loaded(object sender, RoutedEventArgs e) {
         // TaskbarIcon sits outside the WPF visual tree, so it does NOT
-        // inherit DataContext from the Window. We must set it explicitly.
-        TrayIcon.DataContext = DataContext;
+        // inherit DataContext from the Window. Set it right after construction
+        // so that it works even when the window is never shown (autostart).
+        DataContextChanged += (_, _) => TrayIcon.DataContext = DataContext;
+
+        _singleClickTimer = new DispatcherTimer {
+            Interval = TimeSpan.FromMilliseconds(300)
+        };
+        _singleClickTimer.Tick += (_, _) => {
+            _singleClickTimer.Stop();
+            if (DataContext is MainViewModel vm)
+                _ = vm.ToggleServices();
+        };
     }
 
     private void SyncToggleMenuItem_Click(object sender, RoutedEventArgs e) {
@@ -34,20 +43,21 @@ public partial class MainWindow : Window {
     }
 
     private void TrayIcon_TrayLeftMouseUp(object sender, RoutedEventArgs e) {
-        if (DataContext is MainViewModel vm) {
-            _ = vm.ToggleServices();
-        }
+        // Start a short timer; if a double-click follows it will be cancelled.
+        _singleClickTimer.Start();
     }
 
     private void TrayIcon_TrayMouseDoubleClick(object sender, RoutedEventArgs e) {
+        // Cancel any pending single-click toggle so we only open the window.
+        _singleClickTimer.Stop();
+        WindowState = WindowState.Normal;
         Show();
-        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Activate();
     }
 
     private void MenuItem_Open_Click(object sender, RoutedEventArgs e) {
+        WindowState = WindowState.Normal;
         Show();
-        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Activate();
     }
 
