@@ -368,8 +368,9 @@ public class UsbController : IDisposable {
 
                 int offset = 5;
                 for (int i = 0; i < _ledCount; i++) {
-                    pkt[offset++] = (byte)(i == 0 ? (i | 0x80) : i);
-                    pkt[offset++] = (byte)i;
+                    int ledId = i + 1;
+                    pkt[offset++] = (byte)(i == 0 ? 0x80 : ledId);
+                    pkt[offset++] = (byte)ledId;
 
                     int colorIdx = i * 3;
                     if (colorIdx + 2 < colorsLength) {

@@ -51,9 +51,10 @@ function sendRawFrame(colorsArray) {
 
         let offset = 5;
         for (let i = 0; i < TOTAL_LEDS; i++) {
+            let ledId = i + 1;
             // Flag 0x80 is set ONLY for first led
-            pkt[offset++] = (i === 0) ? (i | 0x80) : i; // Start
-            pkt[offset++] = i;                          // End (the same led)
+            pkt[offset++] = (i === 0) ? 0x80 : ledId; // Start
+            pkt[offset++] = ledId;                    // End (1-based index 1..65)
             pkt[offset++] = colorsArray[i].r;
             pkt[offset++] = colorsArray[i].g;
             pkt[offset++] = colorsArray[i].b;
